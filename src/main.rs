@@ -8,7 +8,7 @@ use axum::{extract::State, routing::get, Json, Router};
 use tokio::sync::RwLock;
 
 use source::{spawn_poller, Cache, SourceEntry, Source};
-use sources::docker::Docker;
+use sources::{docker::Docker, systemd_agent::SystemdAgent};
 
 #[tokio::main]
 async fn main() {
@@ -24,6 +24,11 @@ async fn main() {
             "docker-host2",
             "http://100.64.0.11:2375",
             Duration::from_secs(30),
+        )),
+        Box::new(SystemdAgent::new(
+            "systemd-host3",
+            "http://100.64.0.12:9100/units",
+            Duration::from_secs(30)
         )),
     ];
 
