@@ -7,20 +7,29 @@ use std::time::Duration;
 use axum::{extract::State, routing::get, Json, Router};
 use tokio::sync::RwLock;
 
-use source::{spawn_poller, Cache, SourceEntry};
+use source::{spawn_poller, Cache, SourceEntry, Source};
 use sources::docker::Docker;
 
 #[tokio::main]
 async fn main() {
     let cache: Cache = Arc::new(RwLock::new(HashMap::new()));
 
-    let docker = Docker::new(
-        "docker-host1",
-        "http://127.0.0.1:2375",
-        Duration::from_secs(30),
-    );
+    let sources: Vec<Box<dyn Source>> = vec![
+        Box::new(Docker::new(
+            "docker-host1",
+            "http://127.0.0.1:2375",
+            Duration::from_secs(30),
+        )),
+        Box::new(Docker::new(
+            "docker-host2",
+            "http://100.64.0.11:2375",
+            Duration::from_secs(30),
+        )),
+    ];
 
-    spawn_poller(Box::new(docker), cache.clone());
+    for s in sources {
+        spawn_poller(s, cache.clone());
+    }
 
     let app = Router::new()
         .route("/api/status", get(status))
