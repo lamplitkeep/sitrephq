@@ -13,28 +13,19 @@ use sources::{docker::Docker, systemd_agent::SystemdAgent};
 
 #[tokio::main]
 async fn main() {
+    let config_path = std::env::args().nth(1).unwrap_or_else(|| "config.yml".to_string());
+    let config = match config::load(&config_path) {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("config error:\n{e:#}");
+            std::process::exit(1);
+        }
+    };
+
     let cache: Cache = Arc::new(RwLock::new(HashMap::new()));
 
-    let sources: Vec<Box<dyn Source>> = vec![
-        Box::new(Docker::new(
-            "docker-host1",
-            "http://127.0.0.1:2375",
-            Duration::from_secs(30),
-        )),
-        Box::new(Docker::new(
-            "docker-host2",
-            "http://100.64.0.11:2375",
-            Duration::from_secs(30),
-        )),
-        Box::new(SystemdAgent::new(
-            "systemd-host3",
-            "http://100.64.0.12:9100/units",
-            Duration::from_secs(30)
-        )),
-    ];
-
-    for s in sources {
-        spawn_poller(s, cache.clone());
+    for sc in config.sources {
+        spawn_poller(sc.build(), cache.clone());
     }
 
     let app = Router::new()
