@@ -1,5 +1,6 @@
 mod source;
 mod sources;
+mod config;
 
 use std::collections::HashMap;
 use std::sync::Arc;
