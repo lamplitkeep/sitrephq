@@ -1,0 +1,79 @@
+# SitRepHQ Config
+# Copy to config.yml and edit. SECRETS DONT GO HERE!!!
+# Secrets -> Auth field names an environment variable, loaded from the process environment
+# OR a .env file next to the binary.
+#
+# SOURCE TYPE REFERENCES ------------------------------------------------------------
+#
+# docker - containers via a docker-socket-proxy (NO RAW SOCKET)
+# - type: docker
+#   name: docker-<host>                     # unique and become the pill zone key
+#   base: http://<addr>:2375
+#   interval: 30s                           # humantime: 30s, 5m, 6h
+#
+# systemd-agent - units via the sitrep agent running on a remote host
+# - type: systemd-agent
+#   name: systemd-<host>
+#   url: http://<addr>:9100/units
+#   interval: 30s
+#
+# http-json - any JSON API with static auth
+# - type: http-json
+#   name: <name>
+#   url: https://<api_endpoint>
+#   interval: 5m
+#   auth:                                   # OPTIONAL: pick ONE variant
+#     bearer_env: <ENV_VAR>                    # Authorization: Bearer <value>
+#     # header: { name: X-API-KEY, value_env: <ENV_VAR> }
+#     # basic: { user: <user>, password_env: <ENV_VAR> }
+#   insecure: false                         # OPTIONAL: true accepts self-signed certs
+#   expect: json                            # OPTIONAL: json (default) | ok
+#                                               ok = reachability check, body ignored
+#
+# command — run a shell command, capture stdout
+#   - type: command
+#     name: <name>
+#     run: "<command>"                      # runs via sh -c; $(...), pipes, env all work.
+#                                           # NOTE: this makes config.yml security-sensitive —
+#                                           # protect it like you protect your .env
+#     interval: 6h
+#     timeout: 30s                          # optional; default 30s; kills the child on expiry
+#     parse: json                           # optional; json (default) | number | raw
+
+# EXAMPLES ------------------------------------------------------------------------------
+sources:
+  - type: docker
+    name: docker-vps1
+    base: http://203.0.113.10:2375
+    interval: 30s
+
+  - type: systemd-agent
+    name: systemd-host4
+    url: http://204.1.121.20:9100/units
+    interval: 30s
+
+  - type: http-json
+    name: DigitalOcean-Billing
+    url: https://api.digitalocean.com/v2/customers/my/balance
+    interval: 6h
+    auth:
+      bearer_env: DO_TOKEN
+
+  - type: http-json
+    name: kuma-up
+    url: https://uptime.example.com/api/status-page/heartbeat/homelab
+    interval: 1m
+    expect: ok
+
+  - type: command
+    name: glacier
+    run: >
+      AWS_PAGER="" aws cloudwatch get-metric-statistics
+      --namespace AWS/S3 --metric-name BucketSizeBytes
+      --dimensions Name=BucketName,Value={BUCKET} Name=StorageType,Value=DeepArchiveStorage
+      --start-time $(date -u -d '3 days ago' +%Y-%m-%dT%H:%M:%S)
+      --end-time $(date -u +%Y-%m-%dT%H:%M:%S)
+      --period 86400 --statistics Average
+      --region {REGION} --output json
+    interval: 6h
+    timeout: 60s
