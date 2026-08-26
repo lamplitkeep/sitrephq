@@ -5,10 +5,15 @@ use crate::source::Source;
 use crate::sources::docker::Docker;
 use crate::sources::systemd_agent::SystemdAgent;
 use crate::sources::http_json::HttpJson;
+use crate::sources::command::CommandSource;
 
 #[derive(Deserialize)]
 pub struct Config {
     pub sources: Vec<SourceConfig>,
+}
+
+fn default_command_timeout() -> Duration {
+    Duration::from_secs(30)
 }
 
 #[derive(Deserialize)]
@@ -38,6 +43,16 @@ pub enum SourceConfig {
         #[serde(default)]
         expect: Expect,
     },
+    Command {
+        name: String,
+        run: String,
+        #[serde(with = "humantime_serde")]
+        interval: Duration,
+        #[serde(with = "humantime_serde", default = "default_command_timeout")]
+        timeout: Duration,
+        #[serde(default)]
+        parse: Parse,
+    },
 }
 
 #[derive(Deserialize, Default, Clone, Copy)]
@@ -47,6 +62,16 @@ pub enum Expect {
     Json,
     Ok,
 }
+
+#[derive(Deserialize, Default, Clone, Copy)]
+#[serde(rename_all = "snake_case")]
+pub enum Parse {
+    #[default]
+    Json,
+    Number,
+    Raw,
+}
+
 
 #[derive(Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -74,6 +99,9 @@ impl SourceConfig {
             SourceConfig::HttpJson { name, url, interval, auth, insecure, expect }  => {
                 let auth = auth.map(AuthConfig::resolve).transpose()?;
                 Ok(Box::new(HttpJson::new(name, url, interval, auth, insecure, expect)?))
+            }
+            SourceConfig::Command { name, run, interval, timeout, parse } => {
+                Ok(Box::new(CommandSource::new(name, run, interval, timeout, parse)))
             }
         }
     }
