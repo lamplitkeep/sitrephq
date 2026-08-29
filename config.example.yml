@@ -1,5 +1,5 @@
 # SitRepHQ Config
-# Copy to config.yml and edit. SECRETS DONT GO HERE!!!
+# Copy to config.yml and edit. SECRETS DON'T GO HERE!!!
 # Secrets -> Auth field names an environment variable, loaded from the process environment
 # OR a .env file next to the binary.
 #
@@ -31,16 +31,27 @@
 #                                               ok = reachability check, body ignored
 #
 # command — run a shell command, capture stdout
-#   - type: command
-#     name: <name>
-#     run: "<command>"                      # runs via sh -c; $(...), pipes, env all work.
-#                                           # NOTE: this makes config.yml security-sensitive —
-#                                           # protect it like you protect your .env
-#     interval: 6h
-#     timeout: 30s                          # optional; default 30s; kills the child on expiry
-#     parse: json                           # optional; json (default) | number | raw
-
+# - type: command
+#   name: <name>
+#   run: "<command>"                      # runs via sh -c; $(...), pipes, env all work.
+#                                         # NOTE: this makes config.yml security-sensitive —
+#                                         # protect it like you protect your .env
+#   interval: 6h
+#   timeout: 30s                          # optional; default 30s; kills the child on expiry
+#   parse: json                           # optional; json (default) | number | raw
+#
+# SERVER --------------------------------------------------------------------------------
+#
+# bind - address:port -> where the dashboard listens on. This is a security perimeter: SitRepHQ has no login.
+#      - BIND YOUR VPN/TAILNET IP so the kernel only accepts connections from the mesh. NEVER BIND A PUBLIC IP ADDR!
+#
+#      bind: 127.0.0.1:1986                 # default - this machine only
+#      bind: 100.64.0.5:443                 # tailnet IP - reachable mesh-wide
+#
 # EXAMPLES ------------------------------------------------------------------------------
+
+bind: 127.0.0.1:1986
+
 sources:
   - type: docker
     name: docker-vps1
@@ -49,11 +60,11 @@ sources:
 
   - type: systemd-agent
     name: systemd-host4
-    url: http://204.1.121.20:9100/units
+    url: http://198.51.100.20:9100/units
     interval: 30s
 
   - type: http-json
-    name: DigitalOcean-Billing
+    name: digitalocean-Billing
     url: https://api.digitalocean.com/v2/customers/my/balance
     interval: 6h
     auth:
@@ -70,10 +81,30 @@ sources:
     run: >
       AWS_PAGER="" aws cloudwatch get-metric-statistics
       --namespace AWS/S3 --metric-name BucketSizeBytes
-      --dimensions Name=BucketName,Value={BUCKET} Name=StorageType,Value=DeepArchiveStorage
+      --dimensions Name={BucketName},Value={MYBUCKET} Name=StorageType,Value=DeepArchiveStorage
       --start-time $(date -u -d '3 days ago' +%Y-%m-%dT%H:%M:%S)
       --end-time $(date -u +%Y-%m-%dT%H:%M:%S)
       --period 86400 --statistics Average
-      --region {REGION} --output json
+      --region {S3REGION} --output json
     interval: 6h
     timeout: 60s
+
+# LAYOUT ------------------------------------------------------------------------------
+#
+# panes - iframes embedded in the page. Each URL is fetched by the VIEWING BROWSER, not the server. Must be reachable
+# from every device that views the dashboard on (ON VPN OR TAILNET).
+#
+#   - title: <label>                    # shown in the panes title bar
+#     url: https://<target>             # http:// or https:// only
+#     kind: site                        # site(default) - scaled page preview
+#                                       # term - live terminal (ttyd), rendered 1:1
+#
+# Pane origins are automatically added to the dashboard's Content-Security-Policy. Nothing else can be embedded.
+# If pane renders blank, the target is likely sending X-Frame-Options or frame-ancestors.
+# Need dashboard added exact origin only.... NEVER *.
+
+layout:
+  panes:
+    - { title: host5, url: "https://host5.example.ts.net:7681", kind: term }
+    - { title: blog, url: "https://blog.example.com" }
+
