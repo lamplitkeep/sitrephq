@@ -30,6 +30,9 @@ pub struct Pane {
     pub kind: PaneKind,
 }
 
+#[derive(Deserialize, Clone, Default, serde::Serialize)]
+pub struct Theme(pub std::collections::HashMap<String, String>);
+
 fn default_command_timeout() -> Duration {
     Duration::from_secs(30)
 }
@@ -162,6 +165,14 @@ impl Config {
             }
         }
         Ok(())
+    }
+}
+
+pub fn load_theme(path: &str) -> anyhow::Result<Theme> {
+    match std::fs::read_to_string(path) {
+        Ok(text) => Ok(serde_saphyr::from_str(&text)?),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Theme::default()),
+        Err(e) => Err(anyhow::anyhow!("reading {path}: {e}")),
     }
 }
 

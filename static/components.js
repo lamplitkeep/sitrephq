@@ -13,8 +13,8 @@ class SitrepPane extends HTMLElement {
                 <button type="button" title="reload">&#8635;</button>
             </div>
             <div class="frame-wrap">
-                <iframe src="${url}" loading="lazy" referrerpolicy="no-referrer">
-                <div class="veil">pane block or unreachable &dash; check VPN, DNS & targets frame headers</div>
+                <iframe src="${url}" loading="lazy" referrerpolicy="no-referrer"></iframe>
+                <div class="veil">pane block or unreachable &mdash; check VPN, DNS &amp; targets frame headers</div>
             </div>
         `;
 
@@ -30,7 +30,7 @@ class SitrepPane extends HTMLElement {
         if (kind === "site") {
             const ro = new ResizeObserver(() => {
                 const w = wrap.clientWidth;
-                const render = parseFloat(getComputedStyle(this).getPropertyValue("--pane-renderer-width")) || 1280;
+                const render = parseFloat(getComputedStyle(this).getPropertyValue("--pane-render-width")) || 1280;
                 this.style.setProperty("--scale", String(w / render));
             });
             ro.observe(wrap);
@@ -53,10 +53,12 @@ class SitrepPane extends HTMLElement {
 customElements.define("sitrep-pane", SitrepPane)
 
 async function boot() {
-    const res = await fetch("/api/config");
-    const cfg = await res.json();
+    const cfg = await (await fetch("/api/config")).json();
     const root = document.getElementById("panes");
-    for (const p of cfg.panes || []) {
+    for (const [key, value] of Object.entries(cfg.theme || {})) {
+        document.documentElement.style.setProperty(`--${key}`, value);
+    }
+    for (const p of cfg.layout?.panes || []) {
         const el = document.createElement("sitrep-pane");
         el.setAttribute("title", p.title);
         el.setAttribute("url", p.url);

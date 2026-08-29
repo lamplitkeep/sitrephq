@@ -20,10 +20,10 @@
 
     /* STATE - STAMPED STATUS */
     --state-ok: #1e6b34;
-    --state-idle: #5a7350;
+    --state-idle: #6c7350;
     --state-run: #00308f;
     --state-ghost: #8a6d1f;
-    --state-failed: #9b1c1c;
+    --state-bad: #9b1c1c;
 
     /* TYPOGRAPHY */
     --font-display: 'Bebas Neue', sans-serif;

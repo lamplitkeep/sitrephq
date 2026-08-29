@@ -16,6 +16,7 @@ use source::{spawn_poller, Cache, SourceEntry};
 struct AppState {
     cache: Cache,
     layout: config::Layout,
+    theme: config::Theme,
 }
 
 #[tokio::main]
@@ -33,6 +34,18 @@ async fn main() {
 
     let bind = config.bind.clone();
     let layout = config.layout.clone().unwrap_or_else(|| config::Layout { panes: vec![] });
+    let theme_path = std::path::Path::new(&config_path)
+        .parent()
+        .unwrap_or_else(|| std::path::Path::new("."))
+        .join("theme.yml");
+    let theme = match config::load_theme(theme_path.to_str().unwrap_or("theme.yml")) {
+        Ok(t) => t,
+        Err(e) => {
+            eprintln!("theme error:\n{e:#}");
+            std::process::exit(1);
+        }
+    };
+
 
     let csp = {
         let origins: Vec<String> = layout
@@ -56,7 +69,7 @@ async fn main() {
         }
     }
 
-    let state = AppState { cache, layout };
+    let state = AppState { cache, layout, theme };
 
     let app = Router::new()
         .route("/api/status", get(status))
@@ -80,6 +93,6 @@ async fn status(State(state): State<AppState>) -> Json<HashMap<String, SourceEnt
     Json(map)
 }
 
-async fn config_handler(State(state): State<AppState>) -> Json<config::Layout> {
-    Json(state.layout.clone())
+async fn config_handler(State(state): State<AppState>) -> Json<serde_json::Value> {
+    Json(serde_json::json!({ "theme": state.theme, "layout": state.layout }))
 }
