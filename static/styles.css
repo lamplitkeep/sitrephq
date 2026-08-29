@@ -1,15 +1,39 @@
 :root {
-    --bg: #101216;
-    --surface: #f1e9d2;
-    --border: #2a2e37;
-    --text: #c8ccd4;
+    /* BOOTS ON THE GROUND */
+    --bg: #101216;                      /* THE DESK - NEAR-BLACK */
+    --surface: #f1e9d2;                 /* THE PAGE - PARCHMENT */
+    --surface-under: #e2d7b8;           /* INACTIVE TABBED SHEETS */
+    --border: #2a2e37;                  /* DARK BORDERS */
+    --rule: #c9bd9d;                    /* PARCHMENT BORDER HAIRLINES ON PAGE */
+
+    /* INK ON SURFACES */
     --ink: #26231e;
     --ink-dim: #6b6455;
-    --accent: #00308f; /* USAF Blue */
-    --accent-bright: #5d8aa8; /* USAF AIR SUPERIORITY BLUE */
-    --pane-render-width: 1280px;
+
+    /* TEXT ON BACKGROUND */
+    --text: #c8ccd4;
+    --text-dim: #7d838f;
+
+    /* ACCENTS */
+    --accent: #00308f;                  /* USAF BLUE f/SURFACE */
+    --accent-bright: #5d8aa8;           /* USAF AIR SUPERIORITY BLUE f/DARK ONLY*/
+
+    /* STATE - STAMPED STATUS */
+    --state-ok: #1e6b34;
+    --state-idle: #5a7350;
+    --state-run: #00308f;
+    --state-ghost: #8a6d1f;
+    --state-failed: #9b1c1c;
+
+    /* TYPOGRAPHY */
     --font-display: 'Bebas Neue', sans-serif;
     --font-mono: 'Libertinus Mono', monospace;
+
+    /* STRUCTURE */
+    --pill-radius: 3px;
+    --pane-height: 420px;
+    --pane-render-width: 1280px;
+    --tab-stagger: 14px;
 }
 
 * { box-sizing: border-box; }
