@@ -8,23 +8,40 @@
     --accent: #00308f; /* USAF Blue */
     --accent-bright: #5d8aa8; /* USAF AIR SUPERIORITY BLUE */
     --pane-render-width: 1280px;
+    --font-display: 'Bebas Neue', sans-serif;
+    --font-mono: 'Libertinus Mono', monospace;
 }
 
 * { box-sizing: border-box; }
+
+@font-face {
+    font-family: 'Bebas Neue';
+    src: url('fonts/bebas-neue-v16-latin-regular.woff2') format('woff2');
+    font-display: swap;
+}
+
+@font-face {
+    font-family: "Libertinus Mono";
+    src: url('fonts/libertinus-mono-v1-latin-regular.woff2') format('woff2');
+    font-display: swap;
+}
 
 body {
     margin: 0;
     background: var(--bg);
     color: var(--text);
-    font-display: 'Bebas Neue', sans-serif;
-    font-mono: ui-monospace, monospace;
+    font-family: var(--font-mono);
+    font-size: 15px;
+    text-indent: 0.15rem;
+    letter-spacing: 0.1em;
 }
 
 #masthead {
     padding: 10px 16px;
     border-bottom: 1px solid var(--border);
-    letter-spacing: 0.2em;
-    font-style: var(--font-display);
+    font-family: var(--font-display);
+    font-size: 22px;
+    letter-spacing: 0.25em;
 }
 
 #panes {
@@ -47,9 +64,16 @@ sitrep-pane .bar {
     padding: 6px 10px;
     border-bottom: 1px solid var(--border);
     color: var(--ink-dim);
-    font-size: 12px;
+    font-family: var(--font-display);
+    font-size: 15px;
     text-transform: uppercase;
-    letter-spacing: 0.1em;
+    letter-spacing: 0.15em;
+}
+
+sitrep-pane .bar span {
+    font-family: var(--font-display);
+    font-size: 15px;
+    letter-spacing: 0.15em;
 }
 
 sitrep-pane .bar button {
