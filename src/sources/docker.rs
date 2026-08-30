@@ -48,6 +48,10 @@ impl Source for Docker {
         &self.name
     }
 
+    fn kind(&self) -> &'static str {
+        "docker"
+    }
+
     fn interval(&self) -> Duration {
         self.interval
     }

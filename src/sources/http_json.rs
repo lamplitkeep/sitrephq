@@ -61,6 +61,10 @@ impl Source for HttpJson {
         &self.name
     }
 
+    fn kind(&self) -> &'static str {
+        "generic"
+    }
+
     fn interval(&self) -> Duration {
         self.interval
     }

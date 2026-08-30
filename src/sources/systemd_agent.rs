@@ -30,6 +30,10 @@ impl Source for SystemdAgent {
         &self.name
     }
 
+    fn kind(&self) -> &'static str {
+        "systemd"
+    }
+
     fn interval(&self) -> Duration {
         self.interval
     }
