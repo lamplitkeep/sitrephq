@@ -1,4 +1,71 @@
 // @ts-check
+import { classifySystemd, classifyDocker, shortLabel} from "./classify?v=1";
+
+class StatusStrip extends HTMLElement {
+    connectedCallback() {
+        this._render({});
+        this._tick();
+        this._timer = setInterval(() => this._tick(), 30000);
+    }
+
+    disconnectedCallback() {
+        clearInterval(this._timer);
+    }
+
+    async _tick() {
+        try {
+            const res = await fetch("/api/status");
+            this._render(await res.json());
+        } catch {
+
+        }
+    }
+
+    _render(status) {
+        const zones = [];
+        for (const [name, entry] of Object.entries(status).sort()) {
+            const pills = [];
+            let down = false;
+
+            if (entry.error != null || entry.value == null) {
+                down = true;
+            } else if (entry.kind === "docker") {
+                for (const c of entry.value) {
+                    pills.push({ label: c.name, cls: classifyDocker(c), tip: c.status });
+                }
+            } else if (entry.kind === "systemd") {
+                for (const u of entry.value) {
+                    pills.push({ label: shortLabel(u.name), cls: classifySystemd(u), tip: u.name });
+                }
+            } else {
+                pills.push({ label: "up", cls: "idle", tip: `fetched ${entry.fetched_at}` });
+            }
+
+            zones.push({ name, down, pills, tip: entry.error || "" });
+        }
+
+        this.replaceChildren(...zones.map(z => {
+            const zone = document.createElement("div");
+            zone.className = "zone" + (z.down ? " down" : "");
+            zone.title = z.tip;
+
+            const label = document.createElement("span");
+            label.className = "zlabel";
+            label.textContent = z.name;
+            zone.appendChild(label);
+
+            for (const p of z.pills) {
+                const pill = document.createElement("span");
+                pill.className = "pill " + p.cls;
+                pill.textContent = p.label;
+                pill.title = p.tip;
+                zone.appendChild(pill);
+            }
+
+            return zone;
+        }));
+    }
+}
 
 class SitrepPane extends HTMLElement {
     connectedCallback() {
@@ -51,6 +118,7 @@ class SitrepPane extends HTMLElement {
 }
 
 customElements.define("sitrep-pane", SitrepPane)
+customElements.define("status-strip", StatusStrip);
 
 async function boot() {
     const cfg = await (await fetch("/api/config")).json();

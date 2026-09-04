@@ -73,7 +73,59 @@ body {
     grid-template-columns: repeat(auto-fit, minmax(480px, 1fr));
     gap: 12px;
     padding: 12px;
+    border-top: 1px solid var(--border);
 }
+
+#strip {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    padding: 10px 12px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+}
+
+#strip .zone {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    padding: 2px 8px 2px 2px;
+    border: 1px solid var(--rule);
+    border-radius: var(--pill-radius);
+}
+
+#strip .zone > .zlabel {
+    font-family: var(--font-display);
+    font-size: 13px;
+    letter-spacing: 0.12em;
+    color: var(--ink-dim);
+    padding: 0 6px;
+    border-right: 1px solid var(--rule);
+}
+
+#strip .pill {
+    font-size: 12px;
+    line-height: 1;
+    padding: 4px 7px;
+    border-radius: var(--pill-radius);
+    color: var(--surface);
+    background: var(--state-ghost);
+    white-space: nowrap;
+}
+
+#strip .pill.ok     { background: var(--state-ok); }
+#strip .pill.idle   { background: var(--state-idle); }
+#strip .pill.run    { background: var(--state-run); }
+#strip .pill.bad    { background: var(--state-bad); }
+#strip .pill.ghost  { 
+    background: transparent; 
+    color: var(--state-ghost);
+    border: 1px dashed var(--state-ghost);
+}
+
+#strip .zone.down { border-color: var(--state-bad); }
+#strip .zone.down > .zlabel { color: var(--state-bad); }
 
 sitrep-pane {
     display: block;
