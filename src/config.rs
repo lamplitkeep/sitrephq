@@ -6,6 +6,7 @@ use crate::sources::docker::Docker;
 use crate::sources::systemd_agent::SystemdAgent;
 use crate::sources::http_json::HttpJson;
 use crate::sources::command::CommandSource;
+use crate::sources::pihole::Pihole;
 
 #[derive(Deserialize)]
 pub struct Config {
@@ -75,6 +76,13 @@ pub enum SourceConfig {
         #[serde(default)]
         parse: Parse,
     },
+    Pihole {
+        name: String,
+        base: String,
+        password_env: String,
+        #[serde(with = "humantime_serde")]
+        interval: Duration,
+    },
 }
 
 #[derive(Deserialize, Default, Clone, Copy)]
@@ -132,6 +140,11 @@ impl SourceConfig {
             }
             SourceConfig::Command { name, run, interval, timeout, parse } => {
                 Ok(Box::new(CommandSource::new(name, run, interval, timeout, parse)))
+            }
+            SourceConfig::Pihole { name, base, password_env, interval } => {
+                let password = std::env::var(&password_env)
+                    .map_err(|_| anyhow::anyhow!("environment variable {password_env} not set. Check your .env file"))?;
+                Ok(Box::new(Pihole::new(name, base, password, interval)?))
             }
         }
     }

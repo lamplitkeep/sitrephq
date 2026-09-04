@@ -1,6 +1,7 @@
 mod source;
 mod sources;
 mod config;
+mod pihole;
 
 use std::collections::HashMap;
 use std::sync::Arc;
