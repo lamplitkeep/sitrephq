@@ -1,5 +1,5 @@
 // @ts-check
-import { classifySystemd, classifyDocker, shortLabel} from "./classify?v=1";
+import { classifySystemd, classifyDocker, shortLabel } from "./classify.js?v=1";
 
 class StatusStrip extends HTMLElement {
     connectedCallback() {
