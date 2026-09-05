@@ -2,8 +2,12 @@ use async_trait::async_trait;
 use serde::Deserialize;
 use serde_json::json;
 use std::time::Duration;
+use std::collections::VecDeque;
 
 use crate::source::Source;
+
+const BUCKET_SECS: u64 = 300;
+const MAX_BUCKETS: usize = 288;
 
 #[derive(Deserialize)]
 struct Envelope<T> {
@@ -26,6 +30,13 @@ struct Device {
     model: String,
     state: String,
     firmware_updatable: bool,
+}
+
+struct Bucket {
+    start: u64,
+    tx_sum: u64,
+    rx_sum: u64,
+    n: u32,
 }
 
 #[derive(Deserialize)]
@@ -54,6 +65,7 @@ pub struct Unifi {
     gateway: Option<String>,
     interval: Duration,
     client: reqwest::Client,
+    history: VecDeque<Bucket>,
 }
 
 impl Unifi {
@@ -75,7 +87,7 @@ impl Unifi {
             .default_headers(headers)
             .danger_accept_invalid_certs(insecure)
             .build()?;
-        Ok(Self { name, base, site, gateway, interval, client })
+        Ok(Self { name, base, site, gateway, interval, client, history:VecDeque::new() })
     }
 
     async fn get<T: serde::de::DeserializeOwned>(&self, path: &str) -> anyhow::Result<T> {
@@ -96,6 +108,34 @@ impl Unifi {
         self.site = Some(id.clone());
         Ok(id)
     }
+
+    fn record(&mut self, ts: u64, tx: u64, rx: u64) {
+        let start = ts - ts % BUCKET_SECS;
+        match self.history.back_mut() {
+            Some(b) if b.start == start => {
+                b.tx_sum += tx;
+                b.rx_sum += rx;
+                b.n += 1;
+            }
+            _ => {
+                self.history.push_back(Bucket { start, tx_sum: tx, rx_sum: rx, n: 1 });
+                while self.history.len() > MAX_BUCKETS {
+                    self.history.pop_front();
+                }
+            }
+        }
+    }
+
+    fn history_json(&self) -> serde_json::Value {
+        self.history
+            .iter()
+            .map(|b| json!({
+                "t": b.start,
+                "tx": b.tx_sum / b.n as u64,
+                "rx": b.rx_sum / b.n as u64,
+            }))
+            .collect()
+    }
 }
 
 #[async_trait]
@@ -110,18 +150,25 @@ impl Source for Unifi {
         let devices: Envelope<Device> = self.get(&format!("/sites/{site}/devices")).await?;
         let clients: Envelope<Ignored> = self.get(&format!("/sites/{site}/clients?limit=1")).await?;
 
-        let gateway = match &self.gateway {
+        let want = self.gateway.clone();
+        let gateway = match want.as_deref() {
             Some(want) => match devices.data.iter().find(|d| &d.name == want) {
                 Some(d) => {
                     let s: GatewayStats = self
                         .get(&format!("/sites/{site}/devices/{}/statistics/latest", d.id))
                         .await?;
+                    let now = std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .map(|d| d.as_secs())
+                        .unwrap_or(0);
+                    self.record(now, s.uplink.tx_rate_bps, s.uplink.rx_rate_bps);
                     json!({
                         "uptime_sec": s.uptime_sec,
                         "cpu_pct": s.cpu_utilization_pct,
                         "mem_pct": s.memory_utilization_pct,
                         "tx_bps": s.uplink.tx_rate_bps,
                         "rx_bps": s.uplink.rx_rate_bps,
+                        "history": self.history_json(),
                     })
                 }
                 None => json!(null),
