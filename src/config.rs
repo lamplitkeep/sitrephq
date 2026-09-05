@@ -7,6 +7,7 @@ use crate::sources::systemd_agent::SystemdAgent;
 use crate::sources::http_json::HttpJson;
 use crate::sources::command::CommandSource;
 use crate::sources::pihole::Pihole;
+use crate::sources::unifi::Unifi;
 
 #[derive(Deserialize)]
 pub struct Config {
@@ -83,6 +84,19 @@ pub enum SourceConfig {
         #[serde(with = "humantime_serde")]
         interval: Duration,
     },
+    Unifi {
+        name: String,
+        base: String,
+        #[serde(default)]
+        site: Option<String>,
+        #[serde(default)]
+        gateway: Option<String>,
+        key_env: String,
+        #[serde(default)]
+        insecure: bool,
+        #[serde(with = "humantime_serde")]
+        interval: Duration,
+    },
 }
 
 #[derive(Deserialize, Default, Clone, Copy)]
@@ -145,6 +159,12 @@ impl SourceConfig {
                 let password = std::env::var(&password_env)
                     .map_err(|_| anyhow::anyhow!("environment variable {password_env} not set. Check your .env file"))?;
                 Ok(Box::new(Pihole::new(name, base, password, interval)?))
+            }
+            SourceConfig::Unifi { name, base, site, gateway, key_env, insecure, interval } => {
+                let key = std::env::var(&key_env)
+                    .map_err(|_| anyhow::anyhow!("environment variable {key_env} not set. Check your .env file"))?;
+                Ok(Box::new(Unifi::new(name, base, site, gateway, key, insecure, interval)?))
+
             }
         }
     }

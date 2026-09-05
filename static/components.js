@@ -31,12 +31,17 @@ class StatusStrip extends HTMLElement {
                 down = true;
             } else if (entry.kind === "docker") {
                 for (const c of entry.value) {
-                    pills.push({ label: c.name, cls: classifyDocker(c), tip: c.status });
+                    pills.push({label: c.name, cls: classifyDocker(c), tip: c.status});
                 }
             } else if (entry.kind === "systemd") {
                 for (const u of entry.value) {
-                    pills.push({ label: shortLabel(u.name), cls: classifySystemd(u), tip: u.name });
+                    pills.push({label: shortLabel(u.name), cls: classifySystemd(u), tip: u.name});
                 }
+            } else if (entry.kind === "pihole") {
+                const q = entry.value.queries || {};
+                const c = entry.value.clients || {};
+                pills.push({ label: `${Math.round(q.percent_blocked ?? 0)}% blocked`, cls: "ok", tip: `${q.blocked} of ${q.total} queries` });
+                pills.push({ label: `${c.active} clients`, cls: "idle", tip: `${c.total} known` });
             } else {
                 pills.push({ label: "up", cls: "idle", tip: `fetched ${entry.fetched_at}` });
             }
