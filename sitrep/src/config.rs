@@ -216,3 +216,120 @@ pub fn load(path: &str) -> anyhow::Result<Config> {
     config.validate()?;
     Ok(config)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn parse(yaml: &str) -> Config {
+        serde_saphyr::from_str(yaml).expect("should parse")
+    }
+
+    #[test]
+    fn docker_source_parses() {
+        let c = parse("
+sources:
+  - type: docker
+    name: d
+    base: http://x:2375
+    interval: 30s
+");
+        assert_eq!(c.sources.len(), 1);
+        match &c.sources[0] {
+            SourceConfig::Docker { name, base, interval } => {
+                assert_eq!(name, "d");
+                assert_eq!(base, "http://x:2375");
+                assert_eq!(*interval, Duration::from_secs(30));
+            }
+            _ => panic!("wrong variant"),
+        }
+    }
+
+    #[test]
+    fn humantime_intervals() {
+        let c = parse("
+sources:
+  - type: docker
+    name: d
+    base: http://x:2375
+    interval: 6h
+");
+        match &c.sources[0] {
+            SourceConfig::Docker { interval, .. } => {
+                assert_eq!(*interval, Duration::from_secs(6 * 3600));
+            }
+            _ => panic!(),
+        }
+    }
+
+    #[test]
+    fn command_defaults_timeout() {
+        let c = parse("
+sources:
+  - type: command
+    name: c
+    run: echo hi
+    interval: 1m
+");
+        match &c.sources[0] {
+            SourceConfig::Command { timeout, parse, .. } => {
+                assert_eq!(*timeout, Duration::from_secs(30));
+                assert!(matches!(parse, Parse::Json));
+            }
+            _ => panic!()
+        }
+    }
+
+    #[test]
+    fn unknown_type_is_error() {
+        let r: Result<Config, _> = serde_saphyr::from_str("
+sources:
+  - type: gibberish
+    name: x
+");
+        assert!(r.is_err());
+    }
+
+    #[test]
+    fn missing_required_field_is_error() {
+        let r: Result<Config, _> = serde_saphyr::from_str("
+sources:
+  - type: docker
+    name: d
+    interval: 30s
+");
+        assert!(r.is_err());
+    }
+
+    #[test]
+    fn bind_defaults_when_absent() {
+        let c = parse("
+sources: []
+");
+        assert_eq!(c.bind, "127.0.0.1:1986");
+    }
+
+    #[test]
+    fn validate_rejects_javascript_url() {
+        let c = parse("
+sources: []
+layout:
+  panes:
+    - title: x
+      url: \"javascript:alert(1)\"
+");
+        assert!(c.validate().is_err());
+    }
+
+    #[test]
+    fn validate_accepts_https_pane() {
+        let c = parse("
+sources: []
+layout:
+  panes:
+    - title: x
+      url: https://example.com
+");
+        assert!(c.validate().is_ok());
+    }
+}

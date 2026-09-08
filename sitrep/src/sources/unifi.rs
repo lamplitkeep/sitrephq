@@ -196,3 +196,62 @@ impl Source for Unifi {
 }
 
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn empty() -> Unifi {
+        Unifi::new(
+            "t".into(), "httpss://x".into(), Some("s".into()), None,
+            "k".into(), true, Duration::from_secs(30),
+        ).expect("client builds")
+    }
+
+    #[test]
+    fn samples_in_same_bucket_average() {
+        let mut u = empty();
+        u.record(1000, 100, 200); // 1000 -> bucket 900
+        u.record(1100, 300, 400); // still bucket 900
+        assert_eq!(u.history.len(), 1);
+        let b = u.history.back().unwrap();
+        assert_eq!(b.start, 900);
+        assert_eq!(b.n, 2);
+        assert_eq!(b.tx_sum, 400);  // averaged at emit: 200
+    }
+
+    #[test]
+    fn crossing_boundary_opens_new_bucket() {
+        let mut u = empty();
+        u.record(1000, 10, 10); // bucket 900
+        u.record(1300, 20, 20); // bucket 1200
+        assert_eq!(u.history.len(), 2);
+    }
+
+    #[test]
+    fn history_caps_at_max() {
+        let mut u = empty();
+        for i in 0..(MAX_BUCKETS as u64 + 50) {
+            u.record(i * BUCKET_SECS, 1, 1);
+        }
+        assert_eq!(u.history.len(), MAX_BUCKETS);
+    }
+
+    #[test]
+    fn oldest_dropped_first() {
+        let mut u = empty();
+        for i in 0..(MAX_BUCKETS as u64 + 1) {
+            u.record(i * BUCKET_SECS, 1, 1);
+        }
+        assert_eq!(u.history.front().unwrap().start, BUCKET_SECS);
+    }
+
+    #[test]
+    fn emit_averages_not_sums() {
+        let mut u = empty();
+        u.record(0, 100, 100);
+        u.record(60, 300, 300); // same bucket 0, avg 200
+        let v = u.history_json();
+        assert_eq!(v[0]["tx"], 200);
+    }
+}
+
