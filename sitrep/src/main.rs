@@ -38,7 +38,7 @@ async fn main() {
     let theme_path = std::path::Path::new(&config_path)
         .parent()
         .unwrap_or_else(|| std::path::Path::new("."))
-        .join("theme.yml");
+        .join("../theme.yml");
     let theme = match config::load_theme(theme_path.to_str().unwrap_or("theme.yml")) {
         Ok(t) => t,
         Err(e) => {
