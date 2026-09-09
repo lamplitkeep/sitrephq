@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { classifySystemd, classifyDocker, shortLabel } from "../static/classify.js";
+import { classifySystemd, classifyDocker, shortLabel } from "../sitrep/static/classify.js";
 
 const unit = (over) => ({ name: "x.service", active: "inactive", sub: "dead", type: "oneshot", result: "success", ...over });
 
