@@ -18,6 +18,16 @@ pub struct Config {
     pub layout: Option<Layout>,
 }
 
+#[derive(Deserialize, Clone, Default, serde::Serialize)]
+pub struct LabelRules {
+    #[serde(default)]
+    pub strip_prefix: Option<String>,
+    #[serde(default)]
+    pub strip_suffix: Option<String>,
+    #[serde(default)]
+    pub aliases: std::collections::HashMap<String, String>,
+}
+
 #[derive(Deserialize, Clone, serde::Serialize)]
 pub struct Layout {
     #[serde(default)]
@@ -54,6 +64,8 @@ pub enum SourceConfig {
         url: String,
         #[serde(with = "humantime_serde")]
         interval: Duration,
+        #[serde(default)]
+        label_rules: LabelRules,
     },
     HttpJson {
         name: String,
@@ -145,7 +157,7 @@ impl SourceConfig {
             SourceConfig::Docker { name, base, interval} => {
                 Ok(Box::new(Docker::new(name, base, interval)))
             }
-            SourceConfig::SystemdAgent { name, url, interval} => {
+            SourceConfig::SystemdAgent { name, url, interval, label_rules: _ } => {
                 Ok(Box::new(SystemdAgent::new(name, url, interval)))
             }
             SourceConfig::HttpJson { name, url, interval, auth, insecure, expect }  => {

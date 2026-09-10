@@ -1,5 +1,18 @@
 // @ts-check
-import { classifySystemd, classifyDocker, shortLabel } from "./classify.js?v=1";
+import { classifySystemd, classifyDocker } from "./classify.js?v=2";
+
+let LABEL_RULES = {};
+
+function applyRules(name, rules) {
+    if (!rules) return name.replace(/\.(service|target)$/, "");
+    let n = name.replace(/\.(service|target)$/, "");
+    if (rules.strip_prefix && n.startsWith(rules.strip_prefix)) n = n.slice(rules.strip_prefix.length);
+    if (rules.strip_suffix && n.endsWith(rules.strip_suffix)) n = n.slice(0, -rules.strip_suffix.length);
+    if (rules.aliases && rules.aliases[n]) n = rules.aliases[n];
+    return n;
+}
+
+const ATTENTION = { bad: 0, ghost: 1};
 
 class StatusStrip extends HTMLElement {
     connectedCallback() {
@@ -17,60 +30,116 @@ class StatusStrip extends HTMLElement {
             const res = await fetch("/api/status");
             this._render(await res.json());
         } catch {
-
+            // last render
         }
     }
 
     _render(status) {
         const zones = [];
+        const attention = [];
+        let up = 0, down = 0;
+
         for (const [name, entry] of Object.entries(status).sort()) {
+            const rules = LABEL_RULES[name];
             const pills = [];
-            let down = false;
+            let zoneDown = false;
 
             if (entry.error != null || entry.value == null) {
-                down = true;
+                zoneDown = true;
             } else if (entry.kind === "docker") {
-                for (const c of entry.value) {
-                    pills.push({label: c.name, cls: classifyDocker(c), tip: c.status});
-                }
+                for (const c of entry.value) pills.push({ label: c.name, cls: classifyDocker(c), tip: c.status, raw: c.name });
             } else if (entry.kind === "systemd") {
-                for (const u of entry.value) {
-                    pills.push({label: shortLabel(u.name), cls: classifySystemd(u), tip: u.name});
-                }
+                for (const u of entry.value) pills.push({ label: applyRules(u.name, rules), cls: classifySystemd(u), tip: u.name, raw: u.name });
             } else if (entry.kind === "pihole") {
-                const q = entry.value.queries || {};
-                const c = entry.value.clients || {};
-                pills.push({ label: `${Math.round(q.percent_blocked ?? 0)}% blocked`, cls: "ok", tip: `${q.blocked} of ${q.total} queries` });
-                pills.push({ label: `${c.active} clients`, cls: "idle", tip: `${c.total} known` });
+                const q = entry.value.queries || {}, cl = entry.value.clients || {};
+                pills.push({ label: `${Math.round(q.percent_blocked ?? 0)}% blocked`, cls: "ok", tip: `${q.blocked}/${q.total}`, raw: "" });
+                pills.push({ label: `${cl.active} clients`, cls: "idle", tip: `${cl.total} known`, raw: "" });
+            } else if (entry.kind === "unifi") {
+                for (const d of entry.value.devices || []) {
+                    const cls = d.state === "ONLINE" ? (d.firmware_updatable ? "ghost" : "ok") : "bad";
+                    pills.push({ label: d.name, cls, tip: `${d.model}${d.firmware_updatable ? " · update available" : ""}`, raw: d.name });
+                }
+                pills.push({ label: `${entry.value.clients} clients`, cls: "idle", tip: "", raw: "" });
             } else {
-                pills.push({ label: "up", cls: "idle", tip: `fetched ${entry.fetched_at}` });
+                pills.push({ label: "up", cls: "idle", tip: `fetched ${entry.fetched_at}`, raw: "" });
             }
 
-            zones.push({ name, down, pills, tip: entry.error || "" });
+            // tally + collect attention items
+            if (zoneDown) {
+                down++;
+                attention.push({ zone: name, label: "source down", cls: "bad", prio: 0 });
+            } else {
+                up++;
+                for (const p of pills) {
+                    if (p.cls in ATTENTION) {
+                        attention.push({ zone: name, label: p.label, cls: p.cls, prio: ATTENTION[p.cls] });
+                    }
+                }
+            }
+
+            const okCount = pills.filter(p => p.cls === "ok" || p.cls === "idle").length;
+            zones.push({ name, zoneDown, pills, count: `${okCount}/${pills.length}` });
         }
 
-        this.replaceChildren(...zones.map(z => {
-            const zone = document.createElement("div");
-            zone.className = "zone" + (z.down ? " down" : "");
-            zone.title = z.tip;
+        attention.sort((a, b) => a.prio - b.prio);
+        this._paint(zones, attention, { up, down, total: up + down });
+    }
 
-            const label = document.createElement("span");
-            label.className = "zlabel";
-            label.textContent = z.name;
-            zone.appendChild(label);
+    _paint(zones, attention, totals) {
+        const el = (tag, cls, txt) => {
+            const e = document.createElement(tag);
+            if (cls) e.className = cls;
+            if (txt != null) e.textContent = txt;
+            return e;
+        };
 
-            for (const p of z.pills) {
-                const pill = document.createElement("span");
-                pill.className = "pill " + p.cls;
-                pill.textContent = p.label;
-                pill.title = p.tip;
-                zone.appendChild(pill);
+        this.replaceChildren();
+
+        // masthead totals
+        const bar = el("div", "strip-totals");
+        bar.append(
+            el("span", "t-title", "sources:"),
+            el("span", "t-up", `${totals.up} up`),
+            el("span", "t-down", `${totals.down} down`),
+            el("span", "t-total", `${totals.total} total`),
+        );
+        this.appendChild(bar);
+
+        // attention row — only when something qualifies
+        if (attention.length) {
+            const row = el("div", "attention");
+            row.appendChild(el("span", "attn-label", "NEEDS ATTENTION"));
+            for (const a of attention) {
+                const pill = el("span", "pill " + a.cls, a.label);
+                pill.title = a.zone;
+                const chip = el("span", "att-item");
+                chip.append(pill, el("span", "att-zone", a.zone));
+                row.appendChild(chip);
             }
+            this.appendChild(row);
+        }
 
-            return zone;
-        }));
+        // zones, row-per-source with label column
+        for (const z of zones) {
+            const row = el("div", "zone" + (z.zoneDown ? " down" : ""));
+            const label = el("span", "zlabel", z.name);
+            const count = el("span", "zcount", z.zoneDown ? "down" : z.count);
+            const head = el("div", "zhead");
+            head.append(label, count);
+            row.appendChild(head);
+
+            const body = el("div", "zbody");
+            for (const p of z.pills) {
+                const pill = el("span", "pill " + p.cls, p.label);
+                if (p.tip) pill.title = p.tip;
+                body.appendChild(pill);
+            }
+            row.appendChild(body);
+            this.appendChild(row);
+        }
     }
 }
+customElements.define("status-strip", StatusStrip);
 
 class SitrepPane extends HTMLElement {
     connectedCallback() {
@@ -123,14 +192,16 @@ class SitrepPane extends HTMLElement {
 }
 
 customElements.define("sitrep-pane", SitrepPane)
-customElements.define("status-strip", StatusStrip);
 
 async function boot() {
     const cfg = await (await fetch("/api/config")).json();
-    const root = document.getElementById("panes");
+    LABEL_RULES = cfg.label_rules || {};
+
     for (const [key, value] of Object.entries(cfg.theme || {})) {
         document.documentElement.style.setProperty(`--${key}`, value);
     }
+
+    const root = document.getElementById("panes");
     for (const p of cfg.layout?.panes || []) {
         const el = document.createElement("sitrep-pane");
         el.setAttribute("title", p.title);

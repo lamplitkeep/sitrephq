@@ -18,6 +18,7 @@ struct AppState {
     cache: Cache,
     layout: config::Layout,
     theme: config::Theme,
+    label_rules: HashMap<String, config::LabelRules>,
 }
 
 #[tokio::main]
@@ -32,6 +33,16 @@ async fn main() {
             std::process::exit(1);
         }
     };
+
+    let label_rules: std::collections::HashMap<String, config::LabelRules> = config
+        .sources
+        .iter()
+        .filter_map(|s| match s {
+            config::SourceConfig::SystemdAgent { name, label_rules, .. } =>
+                Some((name.clone(), label_rules.clone())),
+            _ => None,
+        })
+        .collect();
 
     let bind = config.bind.clone();
     let layout = config.layout.clone().unwrap_or_else(|| config::Layout { panes: vec![] });
@@ -70,7 +81,7 @@ async fn main() {
         }
     }
 
-    let state = AppState { cache, layout, theme };
+    let state = AppState { cache, layout, theme, label_rules };
 
     let app = Router::new()
         .route("/api/status", get(status))
@@ -95,5 +106,5 @@ async fn status(State(state): State<AppState>) -> Json<HashMap<String, SourceEnt
 }
 
 async fn config_handler(State(state): State<AppState>) -> Json<serde_json::Value> {
-    Json(serde_json::json!({ "theme": state.theme, "layout": state.layout }))
+    Json(serde_json::json!({ "theme": state.theme, "layout": state.layout, "label_rules": state.label_rules, }))
 }

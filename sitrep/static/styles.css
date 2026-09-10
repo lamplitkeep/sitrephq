@@ -11,6 +11,7 @@
     --ink-dim: #6b6455;
 
     /* TEXT ON BACKGROUND */
+    --pill-text: #f1e9d2;
     --text: #c8ccd4;
     --text-dim: #7d838f;
 
@@ -76,53 +77,43 @@ body {
     border-top: 1px solid var(--border);
 }
 
-#strip {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
-    padding: 10px 12px;
-    background: var(--surface);
-    border-bottom: 1px solid var(--border);
-}
+#strip { display: block; padding: 0; background: var(--surface); border-bottom: 1px solid var(--border); }
 
-#strip .zone {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 6px;
-    padding: 2px 8px 2px 2px;
-    border: 1px solid var(--rule);
-    border-radius: var(--pill-radius);
-}
-
-#strip .zone > .zlabel {
-    font-family: var(--font-display);
-    font-size: 13px;
-    letter-spacing: 0.12em;
+.strip-totals {
+    display: flex; gap: 16px; justify-content: flex-end;
+    padding: 6px 12px; border-bottom: 1px solid var(--rule);
+    font-family: var(--font-display); font-size: 14px; letter-spacing: 0.1em;
     color: var(--ink-dim);
-    padding: 0 6px;
-    border-right: 1px solid var(--rule);
 }
+.strip-totals .t-down { color: var(--state-bad); }
+.strip-totals .t-title { color: var(--ink-dim); letter-spacing: 0.1em; }
+
+.attention {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+    padding: 8px 12px; background: var(--surface-under);
+    border-bottom: 1px solid var(--rule);
+}
+.att-item { display: inline-flex; align-items: center; gap: 5px; }
+.att-zone { font-size: 11px; color: var(--ink-dim); }
+
+.zone { display: flex; align-items: baseline; gap: 10px; padding: 5px 12px; border-bottom: 1px solid var(--rule); }
+.zone:last-child { border-bottom: none; }
+.zhead { flex: 0 0 150px; display: flex; justify-content: space-between; align-items: baseline; }
+.zone .zlabel { font-family: var(--font-display); font-size: 13px; letter-spacing: 0.12em; color: var(--ink-dim); }
+.zone .zcount { font-size: 11px; color: var(--ink-dim); }
+.zone.down .zlabel, .zone.down .zcount { color: var(--state-bad); }
+.zbody { display: flex; flex-wrap: wrap; gap: 6px; flex: 1; }
 
 #strip .pill {
-    font-size: 12px;
-    line-height: 1;
-    padding: 4px 7px;
-    border-radius: var(--pill-radius);
-    color: var(--surface);
-    background: var(--state-ghost);
-    white-space: nowrap;
+    font-size: 12px; line-height: 1; padding: 4px 7px;
+    border-radius: var(--pill-radius); color: var(--pill-text);
+    background: var(--state-ghost); white-space: nowrap;
 }
-
-#strip .pill.ok     { background: var(--state-ok); }
-#strip .pill.idle   { background: var(--state-idle); }
-#strip .pill.run    { background: var(--state-run); }
-#strip .pill.bad    { background: var(--state-bad); }
-#strip .pill.ghost  { 
-    background: transparent; 
-    color: var(--state-ghost);
-    border: 1px dashed var(--state-ghost);
-}
+#strip .pill.ok { background: var(--state-ok); }
+#strip .pill.idle { background: var(--state-idle); }
+#strip .pill.run { background: var(--state-run); }
+#strip .pill.bad { background: var(--state-bad); }
+#strip .pill.ghost { background: transparent; color: var(--state-ghost); border: 1px dashed var(--state-ghost); }
 
 #strip .zone.down { border-color: var(--state-bad); }
 #strip .zone.down > .zlabel { color: var(--state-bad); }
@@ -181,3 +172,19 @@ sitrep-pane .veil {
     background: var(--surface);
 }
 sitrep-pane.dead .veil { display: grid; }
+
+.attn-label {
+    font-family: var(--font-display);
+    font-size: 13px;
+    letter-spacing: 0.14em;
+    color: var(--state-bad);
+    font-weight: 700;
+}
+
+.attention {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+    padding: 8px 12px;
+    background: var(--surface-under);
+    border-bottom: 1px solid var(--rule);
+    border-left: 3px solid var(--state-bad);
+}
