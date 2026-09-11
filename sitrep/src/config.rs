@@ -28,6 +28,19 @@ pub struct LabelRules {
     pub aliases: std::collections::HashMap<String, String>,
 }
 
+#[derive(Deserialize, Clone, Default, serde::Serialize)]
+pub struct PillSpec {
+    pub path: String,
+    #[serde(default)]
+    pub label: Option<String>,
+    #[serde(default)]
+    pub state: Option<String>,
+    #[serde(default)]
+    pub format: Option<String>,
+    #[serde(default)]
+    pub map: std::collections::HashMap<String, String>,
+}
+
 #[derive(Deserialize, Clone, serde::Serialize)]
 pub struct Layout {
     #[serde(default)]
@@ -78,6 +91,8 @@ pub enum SourceConfig {
         insecure: bool,
         #[serde(default)]
         expect: Expect,
+        #[serde(default)]
+        pills: Vec<PillSpec>,
     },
     Command {
         name: String,
@@ -88,6 +103,8 @@ pub enum SourceConfig {
         timeout: Duration,
         #[serde(default)]
         parse: Parse,
+        #[serde(default)]
+        pills: Vec<PillSpec>,
     },
     Pihole {
         name: String,
@@ -160,11 +177,11 @@ impl SourceConfig {
             SourceConfig::SystemdAgent { name, url, interval, label_rules: _ } => {
                 Ok(Box::new(SystemdAgent::new(name, url, interval)))
             }
-            SourceConfig::HttpJson { name, url, interval, auth, insecure, expect }  => {
+            SourceConfig::HttpJson { name, url, interval, auth, insecure, expect, pills: _ }  => {
                 let auth = auth.map(AuthConfig::resolve).transpose()?;
                 Ok(Box::new(HttpJson::new(name, url, interval, auth, insecure, expect)?))
             }
-            SourceConfig::Command { name, run, interval, timeout, parse } => {
+            SourceConfig::Command { name, run, interval, timeout, parse, pills: _ } => {
                 Ok(Box::new(CommandSource::new(name, run, interval, timeout, parse)))
             }
             SourceConfig::Pihole { name, base, password_env, interval } => {

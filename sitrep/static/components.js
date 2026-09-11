@@ -1,7 +1,9 @@
 // @ts-check
 import { classifySystemd, classifyDocker } from "./classify.js?v=2";
+import { pluckPill } from "./pluck.js?v=1";
 
 let LABEL_RULES = {};
+let PILL_SPECS = {};
 
 function applyRules(name, rules) {
     if (!rules) return name.replace(/\.(service|target)$/, "");
@@ -61,7 +63,12 @@ class StatusStrip extends HTMLElement {
                 }
                 pills.push({ label: `${entry.value.clients} clients`, cls: "idle", tip: "", raw: "" });
             } else {
-                pills.push({ label: "up", cls: "idle", tip: `fetched ${entry.fetched_at}`, raw: "" });
+                const specs = PILL_SPECS[name];
+                if (specs && specs.length) {
+                    for (const spec of specs) pills.push({...pluckPill(entry.value, spec), raw: ""});
+                } else {
+                    pills.push({label: "up", cls: "idle", tip: `fetched ${entry.fetched_at}`, raw: ""});
+                }
             }
 
             // tally + collect attention items
@@ -196,6 +203,7 @@ customElements.define("sitrep-pane", SitrepPane)
 async function boot() {
     const cfg = await (await fetch("/api/config")).json();
     LABEL_RULES = cfg.label_rules || {};
+    PILL_SPECS = cfg.pill_specs || {};
 
     for (const [key, value] of Object.entries(cfg.theme || {})) {
         document.documentElement.style.setProperty(`--${key}`, value);

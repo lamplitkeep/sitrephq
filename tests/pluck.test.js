@@ -50,3 +50,8 @@ test("pluckPill missing value shows ? and ghost", () => {
     assert.equal(p.label, "X ?");
     assert.equal(p.cls, "ghost"); // missing forces ghost
 });
+
+test("pluckPill empty map falls through to state", () => {
+    const p = pluckPill(data, { path: "clients.active", label: "{}", state: "idle", map: {} });
+    assert.equal(p.cls, "idle");
+});

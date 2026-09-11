@@ -19,6 +19,7 @@ struct AppState {
     layout: config::Layout,
     theme: config::Theme,
     label_rules: HashMap<String, config::LabelRules>,
+    pill_specs: HashMap<String, Vec<config::PillSpec>>,
 }
 
 #[tokio::main]
@@ -40,6 +41,18 @@ async fn main() {
         .filter_map(|s| match s {
             config::SourceConfig::SystemdAgent { name, label_rules, .. } =>
                 Some((name.clone(), label_rules.clone())),
+            _ => None,
+        })
+        .collect();
+
+    let pill_specs: std::collections::HashMap<String, Vec<config::PillSpec>> = config
+        .sources
+        .iter()
+        .filter_map(|s| match s {
+            config::SourceConfig::HttpJson { name, pills, .. } if !pills.is_empty() => 
+                Some((name.clone(), pills.clone())),
+            config::SourceConfig::Command { name, pills, .. } if !pills.is_empty() =>
+                Some((name.clone(), pills.clone())),
             _ => None,
         })
         .collect();
@@ -81,7 +94,7 @@ async fn main() {
         }
     }
 
-    let state = AppState { cache, layout, theme, label_rules };
+    let state = AppState { cache, layout, theme, label_rules, pill_specs };
 
     let app = Router::new()
         .route("/api/status", get(status))
@@ -106,5 +119,5 @@ async fn status(State(state): State<AppState>) -> Json<HashMap<String, SourceEnt
 }
 
 async fn config_handler(State(state): State<AppState>) -> Json<serde_json::Value> {
-    Json(serde_json::json!({ "theme": state.theme, "layout": state.layout, "label_rules": state.label_rules, }))
+    Json(serde_json::json!({ "theme": state.theme, "layout": state.layout, "label_rules": state.label_rules, "pill_specs": state.pill_specs, }))
 }
