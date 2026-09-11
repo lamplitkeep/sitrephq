@@ -45,6 +45,7 @@ impl HttpJson {
             None => {}
         }
 
+
         let client = reqwest::Client::builder()
             .timeout(Duration::from_secs(10))
             .default_headers(headers)

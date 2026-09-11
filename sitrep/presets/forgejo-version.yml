@@ -1,0 +1,7 @@
+type: http-json
+name: forgejo
+url: https://git.example.com/api/v1/version
+interval: 5m
+auth: { header: { name: Authorization, value_env: FORGEJO_TOKEN } }
+pills:
+  - { path: "version", label: "forge {}", state: ok }

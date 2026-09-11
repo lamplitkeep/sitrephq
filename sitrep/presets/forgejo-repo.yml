@@ -1,0 +1,8 @@
+type: http-json
+name: sitrephq
+url: https://git.example.com/api/v1/repos/owner/sitrephq
+interval: 5m
+auth: { header: { name: Authorization, value: "token {}", value_env: FORGEJO_TOKEN } }
+pills:
+    - { path: "open_pr_counter",   label: "{} PRs",   state: idle }
+    - { path: "open_issues_count", label: "{} issues", state: idle }

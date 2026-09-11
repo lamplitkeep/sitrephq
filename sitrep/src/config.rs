@@ -150,7 +150,7 @@ pub enum Parse {
 #[serde(rename_all = "snake_case")]
 pub enum AuthConfig {
     BearerEnv(String),
-    Header { name: String, value_env: String },
+    Header { name: String, #[serde(default)] value: Option<String>, value_env: String },
     Basic { user: String, password_env: String },
 }
 
@@ -207,7 +207,14 @@ impl AuthConfig {
         };
         Ok(match self {
             AuthConfig::BearerEnv(var) => ResolvedAuth::Bearer(get(&var)?),
-            AuthConfig::Header { name, value_env } => ResolvedAuth::Header { name, value: get(&value_env)? },
+            AuthConfig::Header { name, value, value_env } => {
+                let secret = get(&value_env)?;
+                let v = match value {
+                    Some(tpl) => tpl.replace("{}", &secret),
+                    None => secret,
+                };
+                ResolvedAuth::Header { name, value: v }
+            }
             AuthConfig::Basic { user, password_env } => ResolvedAuth::Basic { user, password: get(&password_env)? },
 
         })
@@ -241,7 +248,45 @@ pub fn load_theme(path: &str) -> anyhow::Result<Theme> {
 pub fn load(path: &str) -> anyhow::Result<Config> {
     let text = std::fs::read_to_string(path)
         .map_err(|e| anyhow::anyhow!("reading {path}: {e}"))?;
-    let config: Config = serde_saphyr::from_str(&text)?;
+
+    let root = {
+        let p = std::path::Path::new(path).parent().unwrap_or_else(|| std::path::Path::new(""));
+        if p.as_os_str().is_empty() { std::path::PathBuf::from(".") } else { p.to_path_buf() }
+    };
+
+    let options = serde_saphyr::options! {}.with_include_resolver(
+        move |req: serde_saphyr::IncludeRequest| -> Result<serde_saphyr::ResolvedInclude, serde_saphyr::IncludeResolveError> {
+            let spec = req.spec;
+
+            //confinement checks
+            if spec.starts_with('/') {
+                return Err(serde_saphyr::IncludeResolveError::Message(
+                    format!("include {spec:?}: absolute paths not allowed")));
+            }
+            if !(spec.ends_with(".yaml") || spec.ends_with(".yml")) {
+                return Err(serde_saphyr::IncludeResolveError::Message(
+                    format!("include {spec:?}: must be a .yaml/.yml file")));
+            }
+
+            let canon_root = root.canonicalize()?;                       // io::Error -> Message via From, then ?
+            let canon = root.join(spec).canonicalize()
+                .map_err(|_| serde_saphyr::IncludeResolveError::Message(
+                    format!("include {spec:?}: not found")))?;
+            if !canon.starts_with(&canon_root) {
+                return Err(serde_saphyr::IncludeResolveError::Message(
+                    format!("include {spec:?}: resolves outside the config directory")));
+            }
+
+            let body = std::fs::read_to_string(&canon)?;                // io::Error -> Message via From
+            Ok(serde_saphyr::ResolvedInclude::new(
+                spec.to_string(),
+                spec.to_string(),
+                serde_saphyr::InputSource::from_string(body),
+            ))
+        },
+    );
+
+    let config: Config = serde_saphyr::from_str_with_options(&text, options)?;
     config.validate()?;
     Ok(config)
 }
@@ -362,3 +407,14 @@ layout:
         assert!(c.validate().is_ok());
     }
 }
+
+    #[test]
+    fn include_cannot_escape_root() {
+        // an include pointing outside the config dir must fail, not read the file
+        let dir = std::env::temp_dir().join("sitrep_test_inc");
+        std::fs::create_dir_all(&dir).unwrap();
+        let cfg = dir.join("config.yml");
+        std::fs::write(&cfg, "bind: 127.0.0.1:1986\nsources:\n  - !include ../../../etc/passwd.yaml\n").unwrap();
+        let r = load(cfg.to_str().unwrap());
+        assert!(r.is_err(), "root-escaping include must be refused");
+    }
