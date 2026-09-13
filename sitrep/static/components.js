@@ -295,7 +295,8 @@ function buildRail() {
 function sparkline(history) {
     const W = 600, H = 80, n = history.length;
     const peak = Math.max(1, ...history.map(b => Math.max(b.tx, b.rx)));
-    const x = i => (i / (n - 1)) * W;
+    const SLOTS = 288;
+    const x = i => ((i + (SLOTS - n)) / (SLOTS -1)) * W;
     const y = v => H - (v / peak) * H;
     const pts = key => history.map((b,i) => `${x(i).toFixed(1)},${y(b[key]).toFixed(1)}`).join(" ");
 

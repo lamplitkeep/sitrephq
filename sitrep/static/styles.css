@@ -208,7 +208,7 @@ sitrep-pane.dead .veil { display: grid; }
 .att-tab { font-size: 10px; color: var(--accent); cursor: pointer; letter-spacing: 0.1em; margin-left: 4px; }
 .att-tab:hover { text-decoration: underline; }
 
-.zchart { flex-basis: 100%; height: 40px; margin-top: 4px; }
+.zchart { flex-basis: 100%; width: 100%; height: 40px; margin-top: 4px; align-self: stretch; }
 .spark { width: 100%; height: 100%; display: block; }
 .spark polyline { fill: none; stroke-width: 1.5; vector-effect: non-scaling-stroke; }
 .spark-rx { stroke: var(--state-run); }
