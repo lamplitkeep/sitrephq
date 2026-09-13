@@ -55,6 +55,13 @@ function pillsFor(name, entry) {
     return { down: false, pills, chart, chartPeak }
 }
 
+function logSpan(cls, txt) {
+    const s = document.createElement("span");
+    s.className = cls;
+    s.textContent = txt;
+    return s;
+}
+
 class AttentionBar extends HTMLElement {
     connectedCallback() {
         this._tick();
@@ -205,6 +212,7 @@ class SitrepPane extends HTMLElement {
         const url = this.getAttribute("url") || "";
         const kind = this.getAttribute("kind") || "site";
         this.setAttribute("kind", kind);
+        if (kind === "log") { this._connectLog(); return; }
 
         this.innerHTML = `
             <div class="bar">
@@ -247,6 +255,46 @@ class SitrepPane extends HTMLElement {
         clearTimeout(this._deadline);
         this._deadline = setTimeout(() => this.classList.add("dead"), 8000);
     }
+
+    _connectLog() {
+        const title = this.getAttribute("title") || "log";
+        const filter = this.getAttribute("filter") || "";
+        this.innerHTML = `
+          <div class="bar">
+            <span>${title}</span>
+            <span class="log-dot"></span>
+          </div>
+          <div class="log-body"></div>  
+        `;
+        const body = this.querySelector(".log-body");
+        const dot = this.querySelector(".log-dot");
+        const url = "/api/queries/stream" + (filter ? "?" + filter : "");
+
+        this._es = new EventSource(url);
+        this._es.onopen = () => dot.classList.add("live");
+        this._es.onerror = () => dot.classList.remove("live");
+        this._es.onmessage = (e) => {
+            let row;
+            try { row = JSON.parse(e.data); } catch { return; }
+            const line = document.createElement("div");
+            line.className = "log-line log-" + row.status.toLowerCase();
+            const t = new Date(row.time * 1000).toLocaleTimeString();
+            line.innerHTML = "";
+            line.append(
+                logSpan("log-time", t),
+                logSpan("log-client", row.client),
+                logSpan("log-domain", row.domain),
+                logSpan("log-status", row.status),
+            );
+            body.prepend(line);
+            while (body.children.length > 200) body.lastChild.remove();
+        };
+    }
+
+    disconnectedCallback() {
+        if (this._es) this._es.close();
+        clearTimeout(this._deadline);
+    }
 }
 
 customElements.define("sitrep-pane", SitrepPane)
@@ -275,6 +323,7 @@ function mountTab(i) {
         el.setAttribute("title", p.title);
         el.setAttribute("url", p.url);
         el.setAttribute("kind", p.kind);
+        if (p.filter) el.setAttribute("filter", new URLSearchParams(p.filter).toString());
         panesRoot.appendChild(el);
     }
     document.getElementById("strip")?.refresh?.();

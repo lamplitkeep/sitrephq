@@ -52,9 +52,21 @@ pub struct Layout {
 #[derive(Deserialize, Clone, serde::Serialize)]
 pub struct Pane {
     pub title: String,
+    #[serde(default)]
     pub url: String,
     #[serde(default)]
     pub kind: PaneKind,
+    #[serde(default)]
+    pub filter: std::collections::HashMap<String, String>,
+}
+
+#[derive(Deserialize, Clone, Copy, Default, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PaneKind {
+    #[default]
+    Site,
+    Term,
+    Log,
 }
 
 #[derive(Deserialize, Clone, serde::Serialize)]
@@ -172,14 +184,6 @@ pub enum ResolvedAuth {
     Basic { user: String, password: String },
 }
 
-#[derive(Deserialize, Clone, Copy, Default, serde::Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum PaneKind {
-    #[default]
-    Site,
-    Term,
-}
-
 impl SourceConfig {
     pub fn build(self) -> anyhow::Result<Box<dyn Source>> {
         match self {
@@ -255,13 +259,16 @@ impl Config {
         };
 
         for pane in &layout.panes {
+            if matches!(pane.kind, PaneKind::Log) { continue; }
             check_url(&pane.title, &pane.url)?;
         }
+
 
         let known: Vec<&str> = self.sources.iter().map(|s| s.name()).collect();
         for (i, tab) in layout.tabs.iter().enumerate() {
             let label = tab.name.clone().unwrap_or_else(|| format!("tab {}", i + 1));
             for pane in &tab.panes {
+                if matches!(pane.kind, PaneKind::Log) { continue; }
                 check_url(&pane.title, &pane.url)?;
             }
             for s in &tab.sources {

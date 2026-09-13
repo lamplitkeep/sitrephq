@@ -224,3 +224,17 @@ sitrep-pane.dead .veil { display: grid; }
 .spark-rx { stroke: var(--state-run); }
 .spark-tx { stroke: var(--state-ghost); }
 .spark-grid { stroke: var(--ink-dim); stroke-width: 0.5; opacity: 0.5; vector-effect: non-scaling-stroke; }
+
+sitrep-pane[kind="log"] .log-body {
+    height: 420px; overflow-y: auto;
+    background: var(--surface); font-size: 11px; padding: 4px 8px;
+}
+.log-line { display: flex; gap: 10px; padding: 1px 0; white-space: nowrap; color: var(--ink); }
+.log-time { color: var(--ink-dim); flex: 0 0 auto; }
+.log-client { color: var(--accent); flex: 0 0 110px; }
+.log-domain { flex: 1; overflow: hidden; text-overflow: ellipsis; }
+.log-status { flex: 0 0 auto; color: var(--ink-dim); }
+.log-line.log-gravity .log-status,
+.log-line.log-denylist .log-status { color: var(--state-bad); }   /* blocked = red */
+.log-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--state-bad); align-self: center; }
+.log-dot.live { background: var(--state-ok); }
