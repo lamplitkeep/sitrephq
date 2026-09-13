@@ -4,6 +4,7 @@ import { pluckPill } from "./pluck.js?v=1";
 
 let LABEL_RULES = {};
 let PILL_SPECS = {};
+let SOURCE_ORDER = [];
 
 function applyRules(name, rules) {
     if (!rules) return name.replace(/\.(service|target)$/, "");
@@ -41,7 +42,9 @@ class StatusStrip extends HTMLElement {
         const attention = [];
         let up = 0, down = 0;
 
-        for (const [name, entry] of Object.entries(status).sort()) {
+        const idx = n => { const i = SOURCE_ORDER.indexOf(n); return i < 0 ? 1e9 : i; };
+        const ordered = Object.entries(status).sort((a,b) => idx(a[0]) - idx(b[0]) || a[0].localeCompare(b[0]));
+        for (const [name, entry] of ordered) {
             const rules = LABEL_RULES[name];
             const pills = [];
             let zoneDown = false;
@@ -200,23 +203,70 @@ class SitrepPane extends HTMLElement {
 
 customElements.define("sitrep-pane", SitrepPane)
 
+const PHONETIC = ["ALPHA", "BRAVO", "CHARLIE", "DELTA", "ECHO", "FOXTROT", "GOLF", "HOTEL", "INDIA"];
+let TABS = [];
+let ACTIVE = 0;
+
+function normalizeTabs(layout) {
+    if (layout?.tabs?.length) {
+        return layout.tabs.map((t, i) => ({
+            name: t.name || PHONETIC[i] || `TAB ${i + 1}`,
+            panes: t.panes || [],
+        }));
+    }
+    return [{ name: null, panes: layout?.panes || [] }];
+}
+
+function mountTab(i) {
+    ACTIVE = i;
+    const panesRoot = document.getElementById("panes");
+    panesRoot.replaceChildren();
+    for (const p of TABS[i].panes) {
+        const el = document.createElement("sitrep-pane");
+        el.setAttribute("title", p.title);
+        el.setAttribute("url", p.url);
+        el.setAttribute("kind", p.kind);
+        panesRoot.appendChild(el);
+    }
+    for (const [j, btn] of [...document.getElementById("rail").children].entries()) {
+        btn.classList.toggle("active", j === i);
+    }
+}
+
+function buildRail() {
+    const rail = document.getElementById("rail");
+    rail.replaceChildren();
+    if (TABS.length <= 1) return;
+    TABS.forEach((tab, i) => {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "tab" + (i === ACTIVE ? " active" : "");
+        btn.textContent = tab.name;
+        btn.style.setProperty("--tab-index", String(i));
+        btn.addEventListener("click", () => mountTab(i));
+        rail.appendChild(btn);
+    });
+}
+
 async function boot() {
     const cfg = await (await fetch("/api/config")).json();
     LABEL_RULES = cfg.label_rules || {};
     PILL_SPECS = cfg.pill_specs || {};
+    SOURCE_ORDER = cfg.source_order || [];
 
     for (const [key, value] of Object.entries(cfg.theme || {})) {
         document.documentElement.style.setProperty(`--${key}`, value);
     }
 
-    const root = document.getElementById("panes");
-    for (const p of cfg.layout?.panes || []) {
-        const el = document.createElement("sitrep-pane");
-        el.setAttribute("title", p.title);
-        el.setAttribute("url", p.url);
-        el.setAttribute("kind", p.kind);
-        root.appendChild(el);
-    }
+    TABS = normalizeTabs(cfg.layout);
+    buildRail();
+    mountTab(0);
+
+    document.addEventListener("keydown", (e) => {
+        if (e.target instanceof HTMLInputElement) return;
+        const n = parseInt(e.key, 10);
+        if (n >= 1 && n <= TABS.length) mountTan(n - 1);
+    });
 }
 
 boot();

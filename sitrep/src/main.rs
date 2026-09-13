@@ -20,6 +20,7 @@ struct AppState {
     theme: config::Theme,
     label_rules: HashMap<String, config::LabelRules>,
     pill_specs: HashMap<String, Vec<config::PillSpec>>,
+    source_order: Vec<String>,
 }
 
 #[tokio::main]
@@ -34,6 +35,8 @@ async fn main() {
             std::process::exit(1);
         }
     };
+
+    let source_order: Vec<String> = config.sources.iter().map(|s| s.name().to_string()).collect();
 
     let label_rules: std::collections::HashMap<String, config::LabelRules> = config
         .sources
@@ -58,7 +61,7 @@ async fn main() {
         .collect();
 
     let bind = config.bind.clone();
-    let layout = config.layout.clone().unwrap_or_else(|| config::Layout { panes: vec![] });
+    let layout = config.layout.clone().unwrap_or_else(|| config::Layout { panes: vec![], tabs: vec![] });
     let theme_path = std::path::Path::new(&config_path)
         .parent()
         .unwrap_or_else(|| std::path::Path::new("."))
@@ -73,15 +76,17 @@ async fn main() {
 
 
     let csp = {
-        let origins: Vec<String> = layout
+        let mut origins: Vec<String> = layout
             .panes
             .iter()
+            .chain(layout.tabs.iter().flat_map(|t| t.panes.iter()))
             .map(|p| p.url.splitn(4, '/').take(3).collect::<Vec<_>>().join("/"))
             .collect();
+        origins.sort();
+        origins.dedup();
         let frame_src = if origins.is_empty() { "'none'".to_string() } else { origins.join(" ") };
         format!("frame-ancestors 'none'; frame-src {frame_src}")
     };
-
     let cache: Cache = Arc::new(RwLock::new(HashMap::new()));
 
     for sc in config.sources {
@@ -94,7 +99,7 @@ async fn main() {
         }
     }
 
-    let state = AppState { cache, layout, theme, label_rules, pill_specs };
+    let state = AppState { cache, layout, theme, label_rules, pill_specs, source_order };
 
     let app = Router::new()
         .route("/api/status", get(status))
@@ -119,5 +124,6 @@ async fn status(State(state): State<AppState>) -> Json<HashMap<String, SourceEnt
 }
 
 async fn config_handler(State(state): State<AppState>) -> Json<serde_json::Value> {
-    Json(serde_json::json!({ "theme": state.theme, "layout": state.layout, "label_rules": state.label_rules, "pill_specs": state.pill_specs, }))
+    Json(serde_json::json!({ "theme": state.theme, "layout": state.layout,
+        "label_rules": state.label_rules, "pill_specs": state.pill_specs, "source_order": state.source_order, }))
 }

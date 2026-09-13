@@ -69,12 +69,33 @@ body {
     letter-spacing: 0.25em;
 }
 
-#panes {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(480px, 1fr));
-    gap: 12px;
-    padding: 12px;
-    border-top: 1px solid var(--border);
+#view { display: flex; align-items: flex-start }
+#panes { flex: 1; }
+
+#rail {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 12px 6px;
+    flex: 0 0 auto;
+}
+#rail .tab {
+    writing-mode: vertical-rl;
+    font-family: var(--font-display);
+    font-size: 14px;
+    letter-spacing: 0.15em;
+    padding: 12px 6px;
+    background: var(--surface-under);
+    color: var(--ink-dim);
+    border: 1px solid var(--rule);
+    border-radius: 0 var(--pill-radius) var(--pill-radius) 0;
+    cursor: pointer;
+    margin-top: calc(var(--tab-index) * var(--tab-stagger));   /* binder stagger */
+}
+#rail .tab.active {
+    background: var(--surface);
+    color: var(--ink);
+    border-left: 3px solid var(--accent);
 }
 
 #strip { display: block; padding: 0; background: var(--surface); border-bottom: 1px solid var(--border); }

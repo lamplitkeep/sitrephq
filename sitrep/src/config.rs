@@ -44,7 +44,9 @@ pub struct PillSpec {
 #[derive(Deserialize, Clone, serde::Serialize)]
 pub struct Layout {
     #[serde(default)]
-    pub panes: Vec<Pane>,
+    pub panes: Vec<Pane>,   // flat - untabbed
+    #[serde(default)]
+    pub tabs: Vec<Tab>,     // grouped - tabbed
 }
 
 #[derive(Deserialize, Clone, serde::Serialize)]
@@ -53,6 +55,16 @@ pub struct Pane {
     pub url: String,
     #[serde(default)]
     pub kind: PaneKind,
+}
+
+#[derive(Deserialize, Clone, serde::Serialize)]
+pub struct Tab {
+    #[serde(default)]
+    pub name: Option<String>,  // No name -> phonetic default (ALPHA, BRAVO..)
+    #[serde(default)]
+    pub sources: Vec<String>,  // empty = show ALL sources
+    #[serde(default)]
+    pub panes: Vec<Pane>,
 }
 
 #[derive(Deserialize, Clone, Default, serde::Serialize)]
@@ -171,13 +183,13 @@ pub enum PaneKind {
 impl SourceConfig {
     pub fn build(self) -> anyhow::Result<Box<dyn Source>> {
         match self {
-            SourceConfig::Docker { name, base, interval} => {
+            SourceConfig::Docker { name, base, interval } => {
                 Ok(Box::new(Docker::new(name, base, interval)))
             }
             SourceConfig::SystemdAgent { name, url, interval, label_rules: _ } => {
                 Ok(Box::new(SystemdAgent::new(name, url, interval)))
             }
-            SourceConfig::HttpJson { name, url, interval, auth, insecure, expect, pills: _ }  => {
+            SourceConfig::HttpJson { name, url, interval, auth, insecure, expect, pills: _ } => {
                 let auth = auth.map(AuthConfig::resolve).transpose()?;
                 Ok(Box::new(HttpJson::new(name, url, interval, auth, insecure, expect)?))
             }
@@ -193,10 +205,20 @@ impl SourceConfig {
                 let key = std::env::var(&key_env)
                     .map_err(|_| anyhow::anyhow!("environment variable {key_env} not set. Check your .env file"))?;
                 Ok(Box::new(Unifi::new(name, base, site, gateway, key, insecure, interval)?))
-
             }
         }
     }
+    pub fn name(&self) -> &str {
+        match self {
+            SourceConfig::Docker { name, .. }
+            | SourceConfig::SystemdAgent { name, .. }
+            | SourceConfig::HttpJson { name, .. }
+            | SourceConfig::Command { name, .. }
+            | SourceConfig::Pihole { name, .. }
+            | SourceConfig::Unifi { name, .. } => name,
+        }
+    }
+
 }
 
 impl AuthConfig {
@@ -223,12 +245,30 @@ impl AuthConfig {
 
 impl Config {
     fn validate(&self) -> anyhow::Result<()> {
-        if let Some(layout) = &self.layout {
-            for pane in &layout.panes {
-                let ok = pane.url.starts_with("http://") || pane.url.starts_with("https://");
-                if !ok {
+        let Some(layout) = &self.layout else { return Ok(()) };
+
+        let check_url = |title: &str, url: &str| -> anyhow::Result<()> {
+            if !(url.starts_with("http://") || url.starts_with("https://")) {
+                anyhow::bail!("pane \"{title}\": url must start with http:// or https:// (got {url:?})");
+            }
+            Ok(())
+        };
+
+        for pane in &layout.panes {
+            check_url(&pane.title, &pane.url)?;
+        }
+
+        let known: Vec<&str> = self.sources.iter().map(|s| s.name()).collect();
+        for (i, tab) in layout.tabs.iter().enumerate() {
+            let label = tab.name.clone().unwrap_or_else(|| format!("tab {}", i + 1));
+            for pane in &tab.panes {
+                check_url(&pane.title, &pane.url)?;
+            }
+            for s in &tab.sources {
+                if !known.contains(&s.as_str()) {
                     anyhow::bail!(
-                        "pane \"{}\": url must start with http:// or https:// (got {:?})", pane.title, pane.url
+                        "{label}: sources lists {s:?}, but no source with that name is declared (known: {})",
+                        known.join(", ")
                     );
                 }
             }
@@ -406,7 +446,37 @@ layout:
 ");
         assert!(c.validate().is_ok());
     }
-}
+
+    #[test]
+    fn tab_unknown_source_is_error() {
+        let c = parse("
+sources:
+  - type: docker
+    name: d
+    base: http://x:2375
+    interval: 30s
+layout:
+  tabs:
+    - name: X
+      sources: [d, nope]
+");
+        assert!(c.validate().is_err());
+    }
+
+    #[test]
+    fn tab_known_sources_pass() {
+        let c = parse("
+sources:
+  - type: docker
+    name: d
+    base: http://x:2375
+    interval: 30s
+layout:
+  tabs:
+    - sources: [d]
+");
+        assert!(c.validate().is_ok());
+    }
 
     #[test]
     fn include_cannot_escape_root() {
@@ -418,3 +488,7 @@ layout:
         let r = load(cfg.to_str().unwrap());
         assert!(r.is_err(), "root-escaping include must be refused");
     }
+}
+
+
+
