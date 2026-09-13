@@ -6,6 +6,8 @@ let LABEL_RULES = {};
 let PILL_SPECS = {};
 let SOURCE_ORDER = [];
 
+const ATTENTION = { bad: 0, ghost: 1};
+
 function applyRules(name, rules) {
     if (!rules) return name.replace(/\.(service|target)$/, "");
     let n = name.replace(/\.(service|target)$/, "");
@@ -15,87 +17,141 @@ function applyRules(name, rules) {
     return n;
 }
 
-const ATTENTION = { bad: 0, ghost: 1};
+function pillsFor(name, entry) {
+    const rules = LABEL_RULES[name];
+    const pills = [];
+    if (entry.error != null || entry.value == null) return { down: true, pills }
 
-class StatusStrip extends HTMLElement {
+    if (entry.kind === "docker") {
+        for (const c of entry.value) pills.push({ label: c.name, cls: classifyDocker(c), tip: c.status });
+    } else if (entry.kind === "systemd") {
+        for (const u of entry.value) pills.push({ label: applyRules(u.name, rules), cls: classifySystemd(u), tip: u.name });
+    } else if (entry.kind === "pihole") {
+        const q = entry.value.queries || {}, cl = entry.value.clients || {};
+        pills.push({ label: `${Math.round(q.percent_blocked ?? 0)}% blocked`, cls: "ok", tip: `${q.blocked}/${q.total}` });
+        pills.push({ label: `${cl.active} clients`, cls: "idle", tip: `${cl.total} known` });
+    } else if (entry.kind === "unifi") {
+        for (const d of entry.value.devices || []) {
+            const cls = d.state === "ONLINE" ? (d.firmware_updatable ? "ghost" : "ok") : "bad";
+            pills.push({ label: d.name, cls, tip: `${d.model}${d.firmware_updatable ? " · update available" : ""}` });
+        }
+        pills.push({ label: `${entry.value.clients} clients`, cls: "idle", tip: "" });
+    } else {
+        const specs = PILL_SPECS[name];
+        if (specs && specs.length) {
+            for (const spec of specs) pills.push(pluckPill(entry.value, spec));
+        } else {
+            pills.push({ label: "up", cls: "idle", tip: `fetched ${entry.fetched_at}` });
+        }
+    }
+    return { down: false, pills };
+}
+
+class AttentionBar extends HTMLElement {
     connectedCallback() {
-        this._render({});
         this._tick();
         this._timer = setInterval(() => this._tick(), 30000);
     }
-
-    disconnectedCallback() {
-        clearInterval(this._timer);
-    }
+    disconnectedCallback() { clearInterval(this._timer); }
 
     async _tick() {
         try {
             const res = await fetch("/api/status");
             this._render(await res.json());
-        } catch {
-            // last render
+        } catch { /* keep last */ }
+    }
+
+    _tabOf(source) {
+        for (const t of TABS) {
+            if (!t.sources.length || t.sources.includes(source)) return t.name;
         }
+        return null;
+    }
+
+
+    _render(status) {
+        const attention = [];
+        let up = 0, down = 0;
+
+        for (const [name, entry] of Object.entries(status)) {
+            const { down: zoneDown, pills } = pillsFor(name, entry);
+            const tab = this._tabOf(name);
+            if (zoneDown) {
+                down++;
+                attention.push({ zone: name, tab, label: "source down", cls: "bad", prio: 0 });
+            } else {
+                up++;
+                for (const p of pills) {
+                    if (p.cls in ATTENTION) attention.push({ zone: name, tab, label: p.label, cls: p.cls, prio: ATTENTION[p.cls] });
+                }
+            }
+        }
+        attention.sort((a, b) => a.prio - b.prio);
+
+        const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls;
+            if (txt != null) e.textContent = txt; return e; };
+        this.replaceChildren();
+
+        const bar = el("div", "strip-totals");
+        bar.append(el("span", "t-title", "sources:"), el("span", "t-up", `${up} up`),
+            el("span", "t-down", `${down} down`), el("span", "t-total", `${up + down} total`));
+        this.appendChild(bar);
+
+        if (!attention.length) return;
+        const row = el("div", "attention");
+        row.appendChild(el("span", "attn-label", "NEEDS ATTENTION"));
+        for (const a of attention) {
+            const pill = el("span", "pill " + a.cls, a.label);
+            const chip = el("span", "att-item");
+            chip.append(pill, el("span", "att-zone", a.zone));
+            if (a.tab) {
+                const tag = el("span", "att-tab", a.tab);
+                tag.addEventListener("click", () => mountTab(TABS.findIndex(t => t.name === a.tab)));
+                chip.appendChild(tag);
+            }
+            row.appendChild(chip);
+        }
+        this.appendChild(row);
+    }
+}
+
+customElements.define("attention-bar", AttentionBar);
+
+class StatusStrip extends HTMLElement {
+    connectedCallback() {
+        this._status = {};
+        this._tick();
+        this._timer = setInterval(() => this._tick(), 30000);
+    }
+
+    async _tick() {
+        try {
+            const res = await fetch("/api/status");
+            this._status = await res.json();
+            this.refresh();
+        } catch { }
+    }
+
+    refresh() {                      // re-render from cache; called on tab switch
+        this._render(this._status);
     }
 
     _render(status) {
         const zones = [];
-        const attention = [];
-        let up = 0, down = 0;
-
+        const allowed = TABS[ACTIVE]?.sources || [];
         const idx = n => { const i = SOURCE_ORDER.indexOf(n); return i < 0 ? 1e9 : i; };
-        const ordered = Object.entries(status).sort((a,b) => idx(a[0]) - idx(b[0]) || a[0].localeCompare(b[0]));
+        const ordered = Object.entries(status)
+            .filter(([name]) => !allowed.length || allowed.includes(name))
+            .sort((a, b) => idx(a[0]) - idx(b[0]) || a[0].localeCompare(b[0]));
         for (const [name, entry] of ordered) {
-            const rules = LABEL_RULES[name];
-            const pills = [];
-            let zoneDown = false;
-
-            if (entry.error != null || entry.value == null) {
-                zoneDown = true;
-            } else if (entry.kind === "docker") {
-                for (const c of entry.value) pills.push({ label: c.name, cls: classifyDocker(c), tip: c.status, raw: c.name });
-            } else if (entry.kind === "systemd") {
-                for (const u of entry.value) pills.push({ label: applyRules(u.name, rules), cls: classifySystemd(u), tip: u.name, raw: u.name });
-            } else if (entry.kind === "pihole") {
-                const q = entry.value.queries || {}, cl = entry.value.clients || {};
-                pills.push({ label: `${Math.round(q.percent_blocked ?? 0)}% blocked`, cls: "ok", tip: `${q.blocked}/${q.total}`, raw: "" });
-                pills.push({ label: `${cl.active} clients`, cls: "idle", tip: `${cl.total} known`, raw: "" });
-            } else if (entry.kind === "unifi") {
-                for (const d of entry.value.devices || []) {
-                    const cls = d.state === "ONLINE" ? (d.firmware_updatable ? "ghost" : "ok") : "bad";
-                    pills.push({ label: d.name, cls, tip: `${d.model}${d.firmware_updatable ? " · update available" : ""}`, raw: d.name });
-                }
-                pills.push({ label: `${entry.value.clients} clients`, cls: "idle", tip: "", raw: "" });
-            } else {
-                const specs = PILL_SPECS[name];
-                if (specs && specs.length) {
-                    for (const spec of specs) pills.push({...pluckPill(entry.value, spec), raw: ""});
-                } else {
-                    pills.push({label: "up", cls: "idle", tip: `fetched ${entry.fetched_at}`, raw: ""});
-                }
-            }
-
-            // tally + collect attention items
-            if (zoneDown) {
-                down++;
-                attention.push({ zone: name, label: "source down", cls: "bad", prio: 0 });
-            } else {
-                up++;
-                for (const p of pills) {
-                    if (p.cls in ATTENTION) {
-                        attention.push({ zone: name, label: p.label, cls: p.cls, prio: ATTENTION[p.cls] });
-                    }
-                }
-            }
-
+            const {down: zoneDown, pills} = pillsFor(name, entry);
             const okCount = pills.filter(p => p.cls === "ok" || p.cls === "idle").length;
-            zones.push({ name, zoneDown, pills, count: `${okCount}/${pills.length}` });
+            zones.push({name, zoneDown, pills, count: `${okCount}/${pills.length}`});
         }
-
-        attention.sort((a, b) => a.prio - b.prio);
-        this._paint(zones, attention, { up, down, total: up + down });
+        this._paint(zones);
     }
 
-    _paint(zones, attention, totals) {
+    _paint(zones) {
         const el = (tag, cls, txt) => {
             const e = document.createElement(tag);
             if (cls) e.className = cls;
@@ -104,30 +160,6 @@ class StatusStrip extends HTMLElement {
         };
 
         this.replaceChildren();
-
-        // masthead totals
-        const bar = el("div", "strip-totals");
-        bar.append(
-            el("span", "t-title", "sources:"),
-            el("span", "t-up", `${totals.up} up`),
-            el("span", "t-down", `${totals.down} down`),
-            el("span", "t-total", `${totals.total} total`),
-        );
-        this.appendChild(bar);
-
-        // attention row — only when something qualifies
-        if (attention.length) {
-            const row = el("div", "attention");
-            row.appendChild(el("span", "attn-label", "NEEDS ATTENTION"));
-            for (const a of attention) {
-                const pill = el("span", "pill " + a.cls, a.label);
-                pill.title = a.zone;
-                const chip = el("span", "att-item");
-                chip.append(pill, el("span", "att-zone", a.zone));
-                row.appendChild(chip);
-            }
-            this.appendChild(row);
-        }
 
         // zones, row-per-source with label column
         for (const z of zones) {
@@ -211,10 +243,11 @@ function normalizeTabs(layout) {
     if (layout?.tabs?.length) {
         return layout.tabs.map((t, i) => ({
             name: t.name || PHONETIC[i] || `TAB ${i + 1}`,
+            sources: t.sources || [],
             panes: t.panes || [],
         }));
     }
-    return [{ name: null, panes: layout?.panes || [] }];
+    return [{ name: null, sources: [], panes: layout?.panes || [] }];
 }
 
 function mountTab(i) {
@@ -228,6 +261,7 @@ function mountTab(i) {
         el.setAttribute("kind", p.kind);
         panesRoot.appendChild(el);
     }
+    document.getElementById("strip")?.refresh?.();
     for (const [j, btn] of [...document.getElementById("rail").children].entries()) {
         btn.classList.toggle("active", j === i);
     }
@@ -265,7 +299,7 @@ async function boot() {
     document.addEventListener("keydown", (e) => {
         if (e.target instanceof HTMLInputElement) return;
         const n = parseInt(e.key, 10);
-        if (n >= 1 && n <= TABS.length) mountTan(n - 1);
+        if (n >= 1 && n <= TABS.length) mountTab(n - 1);
     });
 }
 
