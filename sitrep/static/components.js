@@ -20,7 +20,8 @@ function applyRules(name, rules) {
 function pillsFor(name, entry) {
     const rules = LABEL_RULES[name];
     const pills = [];
-    let chart = null;                                    // ← declare here
+    let chart = null;
+    let chartPeak = "";
     if (entry.error != null || entry.value == null) return { down: true, pills, chart };
 
     if (entry.kind === "docker") {
@@ -38,7 +39,11 @@ function pillsFor(name, entry) {
         }
         pills.push({ label: `${entry.value.clients} clients`, cls: "idle", tip: "" });
         const g = entry.value.gateway;
-        chart = g?.history?.length > 1 ? g.history : null;   // ← assign, no `const`
+        chart = g?.history?.length > 1 ? g.history : null;
+        if (chart) {
+            const peak = Math.max(...chart.map(b => Math.max(b.tx, b.rx)));
+            chartPeak = `peak ${humanBps(peak)}`;
+        }
     } else {
         const specs = PILL_SPECS[name];
         if (specs && specs.length) {
@@ -47,7 +52,7 @@ function pillsFor(name, entry) {
             pills.push({ label: "up", cls: "idle", tip: `fetched ${entry.fetched_at}` });
         }
     }
-    return { down: false, pills, chart }
+    return { down: false, pills, chart, chartPeak }
 }
 
 class AttentionBar extends HTMLElement {
@@ -147,9 +152,9 @@ class StatusStrip extends HTMLElement {
             .filter(([name]) => !allowed.length || allowed.includes(name))
             .sort((a, b) => idx(a[0]) - idx(b[0]) || a[0].localeCompare(b[0]));
         for (const [name, entry] of ordered) {
-            const {down: zoneDown, pills, chart} = pillsFor(name, entry);
+            const {down: zoneDown, pills, chart, chartPeak} = pillsFor(name, entry);
             const okCount = pills.filter(p => p.cls === "ok" || p.cls === "idle").length;
-            zones.push({name, zoneDown, pills, chart, count: `${okCount}/${pills.length}`});
+            zones.push({name, zoneDown, pills, chart, chartPeak, count: `${okCount}/${pills.length}`});
         }
         this._paint(zones);
     }
@@ -180,13 +185,14 @@ class StatusStrip extends HTMLElement {
                 body.appendChild(pill);
             }
 
+            row.appendChild(body);
             if (z.chart) {
                 const wrap = el("div", "zchart");
-                wrap.appendChild(sparkline(z.chart));
+                const hdr = el("div", "zchart-hdr");
+                hdr.append(el("span", "zchart-title", "WAN 24H"), el("span", "zchart-peak", z.chartPeak));
+                wrap.append(hdr, sparkline(z.chart));
                 row.appendChild(wrap);
             }
-
-            row.appendChild(body);
             this.appendChild(row);
         }
     }
@@ -296,14 +302,23 @@ function sparkline(history) {
     const W = 600, H = 80, n = history.length;
     const peak = Math.max(1, ...history.map(b => Math.max(b.tx, b.rx)));
     const SLOTS = 288;
-    const x = i => ((i + (SLOTS - n)) / (SLOTS -1)) * W;
-    const y = v => H - (v / peak) * H;
+    const x = (i) => (i / (SLOTS -1)) * W;
+    const y = v => 78 - (v / peak) * 76;   // baseline at 78, peaks to 4 — 2px inset top & bottom
     const pts = key => history.map((b,i) => `${x(i).toFixed(1)},${y(b[key]).toFixed(1)}`).join(" ");
 
     const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
     svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
     svg.setAttribute("preserveAspectRatio", "none");
     svg.classList.add("spark");
+
+    for (let h = 1; h < 6; h++) {
+        const gx = (h / 6) * W;
+        const grid = document.createElementNS("http://www.w3.org/2000/svg", "line");
+        grid.setAttribute("x1", gx); grid.setAttribute("x2", gx);
+        grid.setAttribute("y1", 4); grid.setAttribute("y2", 76);
+        grid.classList.add("spark-grid");
+        svg.appendChild(grid);
+    }
 
     for (const [key, cls] of [["rx", "spark-rx"], ["tx", "spark-tx"]]) {
         const line = document.createElementNS("http://www.w3.org/2000/svg", "polyline");

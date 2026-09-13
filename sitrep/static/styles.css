@@ -34,7 +34,7 @@
     --pill-radius: 3px;
     --pane-height: 420px;
     --pane-render-width: 1280px;
-    --tab-stagger: 14px;
+    --tab-stagger: 4px;
 }
 
 * { box-sizing: border-box; }
@@ -72,7 +72,7 @@ body {
 #page { display: flex; min-height: 100vh; align-items: stretch; }
 #panes { flex: 1; }
 #column { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-#rail { flex: 0 0 auto; display: flex; flex-direction: column; gap: 6px; padding: 12px 6px; }
+#rail { flex: 0 0 auto; display: flex; flex-direction: column; gap: 6px; padding: 30px 6px 12px; }
 
 #rail .tab {
     writing-mode: vertical-rl;
@@ -112,13 +112,13 @@ body {
 .att-item { display: inline-flex; align-items: center; gap: 5px; }
 .att-zone { font-size: 11px; color: var(--ink-dim); }
 
-.zone { display: flex; align-items: baseline; gap: 10px; padding: 5px 12px; border-bottom: 1px solid var(--rule); }
+.zone { display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px; padding: 5px 12px; border-bottom: 1px solid var(--rule); }
 .zone:last-child { border-bottom: none; }
 .zhead { flex: 0 0 150px; display: flex; justify-content: space-between; align-items: baseline; }
 .zone .zlabel { font-family: var(--font-display); font-size: 13px; letter-spacing: 0.12em; color: var(--ink-dim); }
 .zone .zcount { font-size: 11px; color: var(--ink-dim); }
 .zone.down .zlabel, .zone.down .zcount { color: var(--state-bad); }
-.zbody { display: flex; flex-wrap: wrap; gap: 6px; flex: 1; }
+.zbody { display: flex; flex-wrap: wrap; gap: 6px; flex: 1; min-width: 0; }
 
 .pill {
     font-size: 12px; line-height: 1; padding: 4px 7px;
@@ -208,8 +208,19 @@ sitrep-pane.dead .veil { display: grid; }
 .att-tab { font-size: 10px; color: var(--accent); cursor: pointer; letter-spacing: 0.1em; margin-left: 4px; }
 .att-tab:hover { text-decoration: underline; }
 
-.zchart { flex-basis: 100%; width: 100%; height: 40px; margin-top: 4px; align-self: stretch; }
+.zchart {
+    display: flex;
+    align-items: stretch;
+}
+.zchart .spark {
+    background: var(--surface-under);
+    border: 1px solid var(--rule);
+    border-radius: var(--pill-radius);
+    height: 44px;
+}
+.zchart-hdr { display: flex; justify-content: space-between; font-family: var(--font-display); font-size: 11px; letter-spacing: 0.1em; color: var(--ink-dim); padding: 0 2px 2px; }
 .spark { width: 100%; height: 100%; display: block; }
 .spark polyline { fill: none; stroke-width: 1.5; vector-effect: non-scaling-stroke; }
 .spark-rx { stroke: var(--state-run); }
 .spark-tx { stroke: var(--state-ghost); }
+.spark-grid { stroke: var(--ink-dim); stroke-width: 0.5; opacity: 0.5; vector-effect: non-scaling-stroke; }

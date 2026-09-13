@@ -60,6 +60,10 @@ impl PiholeClient {
         Ok(resp.error_for_status()?.json().await?)
     }
 
+    pub async fn queries_since(&mut self, _after: u64) -> anyhow::Result<serde_json::Value> {
+        self.get("/api/queries?length=100").await
+    }
+
     async fn send(&self, path: &str) -> anyhow::Result<reqwest::Response> {
         let sid = self.sid.as_deref().unwrap_or("");
         Ok(self

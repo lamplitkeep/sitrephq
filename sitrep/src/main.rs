@@ -2,16 +2,20 @@ mod source;
 mod sources;
 mod config;
 mod pihole;
+mod log_stream;
 
 use std::collections::HashMap;
 use std::sync::Arc;
-use axum::{extract::State, routing::get, Json, Router};
+use axum::{extract::State, extract::Query, routing::get, Json, Router};
 use axum::http::{header, HeaderValue};
+use axum::response::sse::{Event, Sse};
 use tokio::sync::RwLock;
 use tower_http::services::ServeDir;
 use tower_http::set_header::SetResponseHeaderLayer;
+use futures::stream::Stream;
 
 use source::{spawn_poller, Cache, SourceEntry};
+use log_stream::{spawn_log_poller, LogTx};
 
 #[derive(Clone)]
 struct AppState {
@@ -21,6 +25,36 @@ struct AppState {
     label_rules: HashMap<String, config::LabelRules>,
     pill_specs: HashMap<String, Vec<config::PillSpec>>,
     source_order: Vec<String>,
+    log_tx: Option<LogTx>,
+}
+
+#[derive(serde::Deserialize)]
+struct LogFilter {
+    client: Option<String>,
+    domain: Option<String>,
+    status: Option<String>,
+}
+
+async fn log_stream(
+    State(state): State<AppState>,
+    Query(filter): Query<LogFilter>,
+) -> Sse<impl Stream<Item = Result<Event, std::convert::Infallible>>> {
+    let rx = state.log_tx.as_ref().map(|tx| tx.subscribe());
+    let stream = async_stream::stream! {
+        if let Some(mut rx) = rx {
+            while let Ok(row) = rx.recv().await {
+                let ok = filter.client.as_deref().map_or(true, |p| log_stream::glob_match(p, &row.client))
+                    && filter.domain.as_deref().map_or(true, |p| log_stream::glob_match(p, &row.domain))
+                    && filter.status.as_deref().map_or(true, |p| p.eq_ignore_ascii_case(&row.status));
+                if ok {
+                    if let Ok(json) = serde_json::to_string(&row) {
+                        yield Ok(Event::default().data(json));
+                    }
+                }
+            }
+        }
+    };
+    Sse::new(stream)
 }
 
 #[tokio::main]
@@ -59,6 +93,15 @@ async fn main() {
             _ => None,
         })
         .collect();
+
+    let log_tx = config.sources.iter().find_map(|s| match s {
+        config::SourceConfig::Pihole { base, password_env, .. } => {
+            let pw = std::env::var(password_env).ok()?;
+            let client = pihole::PiholeClient::new(base.clone(), pw).ok()?;
+            Some(spawn_log_poller(Arc::new(tokio::sync::Mutex::new(client))))
+        }
+        _ => None,
+    });
 
     let bind = config.bind.clone();
     let layout = config.layout.clone().unwrap_or_else(|| config::Layout { panes: vec![], tabs: vec![] });
@@ -99,11 +142,12 @@ async fn main() {
         }
     }
 
-    let state = AppState { cache, layout, theme, label_rules, pill_specs, source_order };
+    let state = AppState { cache, layout, theme, label_rules, pill_specs, source_order, log_tx };
 
     let app = Router::new()
         .route("/api/status", get(status))
         .route("/api/config", get(config_handler))
+        .route("/api/queries/stream", get(log_stream))
         .fallback_service(ServeDir::new("static"))
         .layer(SetResponseHeaderLayer::overriding(
             header::CONTENT_SECURITY_POLICY,
