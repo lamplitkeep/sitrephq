@@ -20,7 +20,8 @@ function applyRules(name, rules) {
 function pillsFor(name, entry) {
     const rules = LABEL_RULES[name];
     const pills = [];
-    if (entry.error != null || entry.value == null) return { down: true, pills }
+    let chart = null;                                    // ← declare here
+    if (entry.error != null || entry.value == null) return { down: true, pills, chart };
 
     if (entry.kind === "docker") {
         for (const c of entry.value) pills.push({ label: c.name, cls: classifyDocker(c), tip: c.status });
@@ -36,6 +37,8 @@ function pillsFor(name, entry) {
             pills.push({ label: d.name, cls, tip: `${d.model}${d.firmware_updatable ? " · update available" : ""}` });
         }
         pills.push({ label: `${entry.value.clients} clients`, cls: "idle", tip: "" });
+        const g = entry.value.gateway;
+        chart = g?.history?.length > 1 ? g.history : null;   // ← assign, no `const`
     } else {
         const specs = PILL_SPECS[name];
         if (specs && specs.length) {
@@ -44,7 +47,7 @@ function pillsFor(name, entry) {
             pills.push({ label: "up", cls: "idle", tip: `fetched ${entry.fetched_at}` });
         }
     }
-    return { down: false, pills };
+    return { down: false, pills, chart }
 }
 
 class AttentionBar extends HTMLElement {
@@ -144,9 +147,9 @@ class StatusStrip extends HTMLElement {
             .filter(([name]) => !allowed.length || allowed.includes(name))
             .sort((a, b) => idx(a[0]) - idx(b[0]) || a[0].localeCompare(b[0]));
         for (const [name, entry] of ordered) {
-            const {down: zoneDown, pills} = pillsFor(name, entry);
+            const {down: zoneDown, pills, chart} = pillsFor(name, entry);
             const okCount = pills.filter(p => p.cls === "ok" || p.cls === "idle").length;
-            zones.push({name, zoneDown, pills, count: `${okCount}/${pills.length}`});
+            zones.push({name, zoneDown, pills, chart, count: `${okCount}/${pills.length}`});
         }
         this._paint(zones);
     }
@@ -176,6 +179,13 @@ class StatusStrip extends HTMLElement {
                 if (p.tip) pill.title = p.tip;
                 body.appendChild(pill);
             }
+
+            if (z.chart) {
+                const wrap = el("div", "zchart");
+                wrap.appendChild(sparkline(z.chart));
+                row.appendChild(wrap);
+            }
+
             row.appendChild(body);
             this.appendChild(row);
         }
@@ -280,6 +290,37 @@ function buildRail() {
         btn.addEventListener("click", () => mountTab(i));
         rail.appendChild(btn);
     });
+}
+
+function sparkline(history) {
+    const W = 600, H = 80, n = history.length;
+    const peak = Math.max(1, ...history.map(b => Math.max(b.tx, b.rx)));
+    const x = i => (i / (n - 1)) * W;
+    const y = v => H - (v / peak) * H;
+    const pts = key => history.map((b,i) => `${x(i).toFixed(1)},${y(b[key]).toFixed(1)}`).join(" ");
+
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+    svg.setAttribute("preserveAspectRatio", "none");
+    svg.classList.add("spark");
+
+    for (const [key, cls] of [["rx", "spark-rx"], ["tx", "spark-tx"]]) {
+        const line = document.createElementNS("http://www.w3.org/2000/svg", "polyline");
+        line.setAttribute("points", pts(key));
+        line.classList.add(cls);
+        svg.appendChild(line);
+    }
+    const latest = history[n - 1];
+    svg.setAttribute("aria-label", `WAN ${humanBps(latest.rx)} down / ${humanBps(latest.tx)} up`);
+    return svg;
+}
+
+function humanBps(bps) {
+    const bits = bps * 8;
+    if (bits >= 1e9) return `${(bits / 1e9).toFixed(1)} Gbps`;
+    if (bits >= 1e6) return `${(bits / 1e6).toFixed(1)} Mbps`;
+    if (bits >= 1e3) return `${(bits / 1e3).toFixed(0)} Kbps`;
+    return `${bits} bps`;
 }
 
 async function boot() {
