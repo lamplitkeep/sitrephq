@@ -259,27 +259,48 @@ class SitrepPane extends HTMLElement {
     _connectLog() {
         const title = this.getAttribute("title") || "log";
         const filter = this.getAttribute("filter") || "";
+        this._seen = new Set();
+        this._selected = "";   // "" = all
+
         this.innerHTML = `
-          <div class="bar">
+        <div class="bar">
             <span>${title}</span>
+            <select class="log-filter"><option value="">all clients</option></select>
             <span class="log-dot"></span>
-          </div>
-          <div class="log-body"></div>  
-        `;
+        </div>
+        <div class="log-body"></div>
+    `;
         const body = this.querySelector(".log-body");
         const dot = this.querySelector(".log-dot");
-        const url = "/api/queries/stream" + (filter ? "?" + filter : "");
+        const select = this.querySelector(".log-filter");
 
+        select.addEventListener("change", () => {
+            this._selected = select.value;
+            for (const line of body.children) {
+                line.style.display = (!this._selected || line.dataset.client === this._selected) ? "" : "none";
+            }
+        });
+
+        const url = "/api/queries/stream" + (filter ? "?" + filter : "");
         this._es = new EventSource(url);
         this._es.onopen = () => dot.classList.add("live");
         this._es.onerror = () => dot.classList.remove("live");
         this._es.onmessage = (e) => {
             let row;
             try { row = JSON.parse(e.data); } catch { return; }
+
+            if (!this._seen.has(row.client)) {
+                this._seen.add(row.client);
+                const opt = document.createElement("option");
+                opt.value = row.client; opt.textContent = row.client;
+                select.appendChild(opt);
+            }
+
             const line = document.createElement("div");
             line.className = "log-line log-" + row.status.toLowerCase();
+            line.dataset.client = row.client;
+            if (this._selected && row.client !== this._selected) line.style.display = "none";
             const t = new Date(row.time * 1000).toLocaleTimeString();
-            line.innerHTML = "";
             line.append(
                 logSpan("log-time", t),
                 logSpan("log-client", row.client),

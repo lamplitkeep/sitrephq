@@ -1,0 +1,16 @@
+[Unit]
+Description=SitRepHQ systemd agent
+After=network-online.target tailscaled.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=sitrep-agent
+Environment=AGENT_BIND=<tailnet-ip>:9100
+Environment=AGENT_UNITS=/etc/sitrep-agent/units
+ExecStart=/opt/sitrep-agent/sitrep-agent
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

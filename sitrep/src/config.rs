@@ -13,9 +13,12 @@ use crate::sources::unifi::Unifi;
 pub struct Config {
     #[serde(default = "default_bind")]
     pub bind: String,
+    #[serde(default)]
+    pub tls: Option<TlsConfig>,
     pub sources: Vec<SourceConfig>,
     #[serde(default)]
     pub layout: Option<Layout>,
+
 }
 
 #[derive(Deserialize, Clone, Default, serde::Serialize)]
@@ -81,6 +84,12 @@ pub struct Tab {
 
 #[derive(Deserialize, Clone, Default, serde::Serialize)]
 pub struct Theme(pub std::collections::HashMap<String, String>);
+
+#[derive(Deserialize, Clone, serde::Serialize)]
+pub struct TlsConfig {
+    pub cert: String,
+    pub key: String,
+}
 
 fn default_command_timeout() -> Duration {
     Duration::from_secs(30)

@@ -104,6 +104,7 @@ async fn main() {
     });
 
     let bind = config.bind.clone();
+    let tls = config.tls.clone();
     let layout = config.layout.clone().unwrap_or_else(|| config::Layout { panes: vec![], tabs: vec![] });
     let theme_path = std::path::Path::new(&config_path)
         .parent()
@@ -155,11 +156,24 @@ async fn main() {
         ))
         .with_state(state);
 
-    let listener = tokio::net::TcpListener::bind(&bind)
-        .await
-        .expect("bind failed");
-    println!("listening on http://{bind}");
-    axum::serve(listener, app).await.expect("server failed");
+    match tls {
+        Some(tls) => {
+            let cfg = axum_server::tls_rustls::RustlsConfig::from_pem_file(&tls.cert, &tls.key)
+                .await
+                .expect("loading TLS cert/key");
+            let addr: std::net::SocketAddr = bind.parse().expect("invalid bind address");
+            println!("listening on https://{bind}");
+            axum_server::bind_rustls(addr, cfg)
+                .serve(app.into_make_service())
+                .await
+                .expect("server failed");
+        }
+        None => {
+            let listener = tokio::net::TcpListener::bind(&bind).await.expect("bind failed");
+            println!("listening on http://{bind}");
+            axum::serve(listener, app).await.expect("server failed");
+        }
+    }
 }
 
 async fn status(State(state): State<AppState>) -> Json<HashMap<String, SourceEntry>> {

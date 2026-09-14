@@ -229,6 +229,13 @@ sitrep-pane[kind="log"] .log-body {
     height: 420px; overflow-y: auto;
     background: var(--surface); font-size: 11px; padding: 4px 8px;
 }
+sitrep-pane[kind="log"] .bar { align-items: center; }
+.log-filter {
+    font-family: var(--font-mono); font-size: 11px;
+    background: var(--surface-under); color: var(--ink);
+    border: 1px solid var(--rule); border-radius: var(--pill-radius);
+    padding: 1px 4px; margin-left: auto; margin-right: 8px;
+}
 .log-line { display: flex; gap: 10px; padding: 1px 0; white-space: nowrap; color: var(--ink); }
 .log-time { color: var(--ink-dim); flex: 0 0 auto; }
 .log-client { color: var(--accent); flex: 0 0 110px; }
