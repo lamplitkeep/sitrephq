@@ -73,4 +73,21 @@ impl PiholeClient {
             .send()
             .await?)
     }
+
+}
+
+impl Drop for PiholeClient {
+    fn drop(&mut self) {
+        if let Some(sid) = self.sid.take() {
+            let base = self.base.clone();
+            let http = self.http.clone();
+            tokio::spawn(async move {
+                let _ = http
+                    .delete(format!("{base}/api/auth"))
+                    .header("sid", sid)
+                    .send()
+                    .await;
+            });
+        }
+    }
 }

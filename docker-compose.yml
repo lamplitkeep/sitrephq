@@ -1,0 +1,10 @@
+services:
+  sitrep:
+    image: ghcr.io/lamplitkeep/sitrephq:latest
+    # build: .
+    network_mode: host
+    volumes:
+      - ./config:/config:ro
+    env_file:
+      - ./config/.env
+    restart: unless-stopped

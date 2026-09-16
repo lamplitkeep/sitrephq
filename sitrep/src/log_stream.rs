@@ -19,16 +19,21 @@ pub fn spawn_log_poller(client: Arc<Mutex<PiholeClient>>) -> LogTx {
     let out = tx.clone();
     tokio::spawn(async move {
         let mut watermark: u64 = 0;
-        let mut ticker = tokio::time::interval(std::time::Duration::from_secs(2));
+        let mut backoff = 2u64;
         loop {
-            ticker.tick().await;
+            tokio::time::sleep(std::time::Duration::from_secs(backoff)).await;
+
             let fetched = {
                 let mut c = client.lock().await;
                 c.queries_since(watermark).await
             };
             let val = match fetched {
-                Ok(v) => v,
-                Err(e) => { eprintln!("[pihole-log] {e:#}"); continue; }
+                Ok(v) => { backoff = 2; v }
+                Err(e) => {
+                    eprintln!("[pihole-log] {e:#} (retrying in {}s", backoff.min(60));
+                    backoff = (backoff * 2).min(60);
+                    continue;
+                }
             };
             let Some(rows) = val.get("queries").and_then(|q| q.as_array()) else { continue };
             let mut new_rows: Vec<LogRow> = rows.iter().filter_map(|q| {

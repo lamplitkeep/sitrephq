@@ -1,0 +1,8 @@
+target
+**/.env
+sitrep/config.yml
+sitrep/theme.yml
+sitrep/sources
+sitrep/presets
+sirep/examples
+.git

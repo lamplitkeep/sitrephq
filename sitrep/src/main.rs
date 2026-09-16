@@ -3,6 +3,8 @@ mod sources;
 mod config;
 mod pihole;
 mod log_stream;
+mod assets;
+mod check;
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -10,7 +12,6 @@ use axum::{extract::State, extract::Query, routing::get, Json, Router};
 use axum::http::{header, HeaderValue};
 use axum::response::sse::{Event, Sse};
 use tokio::sync::RwLock;
-use tower_http::services::ServeDir;
 use tower_http::set_header::SetResponseHeaderLayer;
 use futures::stream::Stream;
 
@@ -60,15 +61,24 @@ async fn log_stream(
 #[tokio::main]
 async fn main() {
     let _ = dotenvy::dotenv();
+    let args: Vec<String> = std::env::args().collect();
+    let is_check = args.iter().any(|a| a == "check");
 
-    let config_path = std::env::args().nth(1).unwrap_or_else(|| "config.yml".to_string());
+    let config_path = args.iter()
+        .skip(1)
+        .find(|a| *a != "check")
+        .cloned()
+        .unwrap_or_else(|| "config.yml".to_string());
+
     let config = match config::load(&config_path) {
         Ok(c) => c,
-        Err(e) => {
-            eprintln!("config error:\n{e:#}");
-            std::process::exit(1);
-        }
+        Err(e) => { eprintln!("config error:\n{e:#}"); std::process::exit(1)}
     };
+
+    if is_check {
+        check::run(&config).await;
+        return;
+    }
 
     let source_order: Vec<String> = config.sources.iter().map(|s| s.name().to_string()).collect();
 
@@ -149,7 +159,7 @@ async fn main() {
         .route("/api/status", get(status))
         .route("/api/config", get(config_handler))
         .route("/api/queries/stream", get(log_stream))
-        .fallback_service(ServeDir::new("static"))
+        .fallback(assets::serve)
         .layer(SetResponseHeaderLayer::overriding(
             header::CONTENT_SECURITY_POLICY,
             HeaderValue::from_str(&csp).expect("csp header"),
