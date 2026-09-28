@@ -1,3 +1,5 @@
+# Situation: black ops-room screen, hard square pills.
+# Copy to theme.yml next to config.yml.
 bg: "#000000"
 surface: "#0e0e10"
 surface-under: "#060607"
@@ -14,5 +16,5 @@ state-ok: "#33cc55"
 state-idle: "#2a6b3d"
 state-run: "#3399ff"
 state-ghost: "#ffcc00"
-state-failed: "#ff3333"
+state-bad: "#ff3333"
 pill-radius: "0px"

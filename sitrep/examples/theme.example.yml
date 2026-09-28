@@ -1,0 +1,58 @@
+# SitRepHQ theme reference
+#
+# theme.yml is optional and lives next to config.yml. Every key is optional: set
+# only what you want to change and the rest keep their defaults. Keys are flat;
+# each one overrides the CSS custom property of the same name (bg -> --bg).
+# Unknown keys are ignored without an error, so check spelling if a change doesn't
+# show. A theme.yml that isn't valid YAML stops startup.
+#
+# Uncomment any line to use it. Colors shown are the Binder palette. Values are
+# plain CSS, so anything CSS accepts works (hex, rgb(), hsl(), named colors).
+# Quote values that start with # or they become YAML comments.
+#
+# Ready-made palettes: theme.example-binder.yml, theme.example-ambient.yml,
+# theme.example-situation.yml.
+
+# Ground and page ---------------------------------------------------------------
+
+# bg: "#1a1712"               # page background behind everything
+# surface: "#ede4c9"          # panes, strip, and tab faces
+# surface-under: "#e2d7b8"    # the layer showing beneath a surface (inactive tabs)
+# border: "#3a3428"           # outlines drawn on bg
+# rule: "#c9bd9d"             # hairlines drawn on surface
+
+# Text --------------------------------------------------------------------------
+# Two pairs, because text sits on two grounds. ink is for surface, text is for bg.
+
+# ink: "#26231e"              # primary text on surface
+# ink-dim: "#6b6455"          # secondary text on surface (labels, counts)
+# text: "#d8cdb4"             # primary text on bg (masthead, attention bar)
+# text-dim: "#9a8f76"         # secondary text on bg
+# pill-text: "#ede4c9"        # text inside state pills
+
+# Accents -----------------------------------------------------------------------
+
+# accent: "#00308f"           # links and highlights on surface
+# accent-bright: "#c9a24a"    # highlights on bg, active tab
+
+# States ------------------------------------------------------------------------
+# Every pill is one of these five. The names are fixed; only the colors change.
+
+# state-ok: "#1e6b34"         # running and healthy
+# state-idle: "#5a7350"       # fine but not running (finished job, stopped on purpose, a plain value)
+# state-run: "#00308f"        # in progress (activating, starting, a job mid-run)
+# state-ghost: "#8a6d1f"      # unknown or unexpected: no data, unmapped value, missing field
+# state-bad: "#9b1c1c"        # failed, unhealthy, or unreachable
+
+# Type --------------------------------------------------------------------------
+# Fonts must already be available to the browser. The bundled fonts are
+# Bebas Neue (display) and Libertinus Mono (mono).
+
+# font-display: "'Bebas Neue', sans-serif"        # masthead, zone and pane titles
+# font-mono: "'Libertinus Mono', monospace"       # pills, data, log rows
+
+# Shape -------------------------------------------------------------------------
+
+# pill-radius: "3px"          # 0px for square, 999px for fully round
+# pane-render-width: "1280px" # site panes render the page at this width, then scale it to fit
+# tab-stagger: "8px"          # vertical offset between staggered tabs in the rail

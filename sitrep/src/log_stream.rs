@@ -30,8 +30,8 @@ pub fn spawn_log_poller(client: Arc<Mutex<PiholeClient>>) -> LogTx {
             let val = match fetched {
                 Ok(v) => { backoff = 2; v }
                 Err(e) => {
-                    eprintln!("[pihole-log] {e:#} (retrying in {}s", backoff.min(60));
                     backoff = (backoff * 2).min(60);
+                    eprintln!("[pihole-log] {e:#} (retrying in {backoff}s)");
                     continue;
                 }
             };

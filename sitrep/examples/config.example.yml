@@ -1,54 +1,189 @@
-# SitRepHQ Config
-# Copy to config.yml and edit. SECRETS DON'T GO HERE!!!
-# Secrets -> Auth field names an environment variable, loaded from the process environment
-# OR a .env file next to the binary.
+# SitRepHQ config
 #
-# SOURCE TYPE REFERENCES ------------------------------------------------------------
+# Copy to config.yml and edit. Run `sitrep` from the directory that holds it, or
+# pass the path: `sitrep /etc/sitrep/config.yml`.
 #
-# docker - containers via a docker-socket-proxy (NO RAW SOCKET)
-# - type: docker
-#   name: docker-<host>                     # unique and become the pill zone key
-#   base: http://<addr>:2375
-#   interval: 30s                           # humantime: 30s, 5m, 6h
+# SECRETS NEVER GO IN THIS FILE. Any field ending in _env names an environment
+# variable, and the value is read from the process environment at startup. SitRepHQ
+# also loads a .env file from the working directory it was started in (it never
+# overrides variables that are already set, so systemd EnvironmentFile or your
+# container's env wins). A source whose variable is missing stops startup with an
+# error naming the variable. See env.example.
 #
-# systemd-agent - units via the sitrep agent running on a remote host
-# - type: systemd-agent
-#   name: systemd-<host>
-#   url: http://<addr>:9100/units
+# Run `sitrep check` after editing to validate the file and diagnose panes.
+#
+# SERVER --------------------------------------------------------------------------
+#
+# bind: address:port the dashboard listens on. Default 127.0.0.1:1986.
+#   This is the security perimeter. SitRepHQ has no login, so anyone who can reach
+#   this address sees the dashboard. Bind a VPN or tailnet IP so the kernel only
+#   accepts connections from that network. Never bind a public address.
+#
+#   bind: 127.0.0.1:1986          # this machine only (default)
+#   bind: 100.64.0.5:1986         # tailnet IP, reachable from anywhere on the mesh
+#
+# tls: optional. Serve HTTPS directly with a PEM cert and key.
+#   Leave it out if a reverse proxy (Caddy, Traefik, nginx) terminates TLS in front
+#   of SitRepHQ; in that case keep bind on 127.0.0.1 and proxy to it.
+#
+#   tls:
+#     cert: /etc/sitrep/fullchain.pem
+#     key: /etc/sitrep/privkey.pem
+#
+# SOURCES -------------------------------------------------------------------------
+#
+# Every source needs a type, a name, and an interval. The name must be unique: it
+# becomes the zone label in the status strip and is what tabs refer to. Intervals
+# are humantime strings: 30s, 5m, 6h, 1d. Sources appear in the strip in the order
+# they are listed here.
+#
+# docker: containers through a docker socket proxy. Point it at a read-only proxy
+# (tecnativa/docker-socket-proxy or similar with CONTAINERS=1), never the raw socket.
+#   - type: docker
+#     name: docker-<host>
+#     base: http://<addr>:2375
+#     interval: 30s
+#
+# systemd-agent: units reported by sitrep-agent running on another host.
+#   - type: systemd-agent
+#     name: systemd-<host>
+#     url: http://<addr>:9100/units
+#     interval: 30s
+#     label_rules:                     # optional, display only
+#       strip_prefix: myapp-           # myapp-worker   -> worker
+#       strip_suffix: -pull            # feed-pull      -> feed
+#       aliases:                       # applied after stripping
+#         feed: FEED-main
+#   The raw unit name stays in the pill tooltip so you can still grep for it.
+#
+# pihole: Pi-hole v6 stats, and the query stream behind log panes.
+#   - type: pihole
+#     name: dns
+#     base: http://<addr>:<port>      # the web UI address, without /admin
+#     password_env: PIHOLE_PASSWORD   # an app password from Settings > Web interface / API
+#     interval: 30s
+#   SitRepHQ holds two Pi-hole sessions (stats and the log stream) and logs both
+#   out on shutdown. If you restart often and hit 401s, raise
+#   webserver.api.max_sessions in pihole.toml.
+#
+# unifi: UniFi Network devices, clients, and WAN throughput.
+#   - type: unifi
+#     name: net
+#     base: https://<gateway addr>
+#     key_env: UNIFI_KEY              # minted inside the Network app:
+#                                     # Settings > Control Plane > Integrations
+#     site: <site id>                 # optional, the first site is used when omitted
+#     gateway: <device name>          # optional, enables the WAN 24h chart
+#     insecure: true                  # optional, UniFi consoles ship self-signed certs
+#     interval: 30s
+#   WAN history is kept in memory in 5 minute buckets. It starts empty on every
+#   restart and fills in over 24 hours.
+#
+# http-json: any JSON API.
+#   - type: http-json
+#     name: <name>
+#     url: https://<endpoint>
+#     interval: 5m
+#     auth:                           # optional, pick ONE
+#       bearer_env: <ENV_VAR>         #   Authorization: Bearer <secret>
+#       # header: { name: X-Api-Key, value_env: <ENV_VAR> }
+#       #                             #   X-Api-Key: <secret>
+#       # header: { name: Authorization, value: "token {}", value_env: <ENV_VAR> }
+#       #                             #   value is a template, {} is the secret
+#       # basic: { user: <user>, password_env: <ENV_VAR> }
+#     insecure: false                 # optional, true accepts self-signed certs
+#     expect: json                    # optional, json (default) or ok
+#                                     #   ok = reachability only, body ignored
+#     pills: []                       # optional, see PILLS below
+#
+# command: run a shell command and read its stdout.
+#   - type: command
+#     name: <name>
+#     run: "<command>"                # runs via sh -c, so pipes, $(...) and env vars work
+#     interval: 6h
+#     timeout: 30s                    # optional, default 30s, the child is killed on expiry
+#     parse: json                     # optional, json (default), number, or raw
+#     pills: []                       # optional, see PILLS below
+#   The command inherits SitRepHQ's environment, so secrets from .env reach it
+#   without appearing here. Because this file can run commands, protect it the
+#   same way you protect .env. The distroless Docker image has no shell; use the
+#   :full image or the binary for command sources.
+#
+# PILLS ---------------------------------------------------------------------------
+#
+# http-json and command sources show a single up/down pill by default. Add pills:
+# to pull values out of the response instead. Each entry is one pill.
+#
+#   pills:
+#     - path: data.used               # dotted path into the JSON; numbers index arrays,
+#                                     # negative numbers count from the end
+#       label: "disk {}"              # {} is replaced by the value
+#       format: bytes                 # optional: bytes, percent, or number
+#       state: idle                   # optional: ok, idle, run, ghost, or bad
+#       map:                          # optional: value -> state
+#         healthy: ok
+#         degraded: bad
+#
+# With map, values not listed render as ghost. A path that no longer exists in the
+# response renders "?" as ghost, so an API change shows up instead of hiding.
+#
+# INCLUDES ------------------------------------------------------------------------
+#
+# Any list entry can come from its own file:
+#
+#   sources:
+#     - !include sources/docker-vps1.yml
+#     - !include sources/dns.yml
+#
+# Each file holds ONE source as a bare mapping (no leading dash):
+#
+#   type: docker
+#   name: docker-vps1
+#   base: http://203.0.113.10:2375
 #   interval: 30s
 #
-# http-json - any JSON API with static auth
-# - type: http-json
-#   name: <name>
-#   url: https://<api_endpoint>
-#   interval: 5m
-#   auth:                                   # OPTIONAL: pick ONE variant
-#     bearer_env: <ENV_VAR>                    # Authorization: Bearer <value>
-#     # header: { name: X-API-KEY, value_env: <ENV_VAR> }
-#     # basic: { user: <user>, password_env: <ENV_VAR> }
-#   insecure: false                         # OPTIONAL: true accepts self-signed certs
-#   expect: json                            # OPTIONAL: json (default) | ok
-#                                               ok = reachability check, body ignored
+# Paths are relative to this file and cannot leave its directory. Absolute paths
+# and anything other than .yml or .yaml are refused.
 #
-# command — run a shell command, capture stdout
-# - type: command
-#   name: <name>
-#   run: "<command>"                      # runs via sh -c; $(...), pipes, env all work.
-#                                         # NOTE: this makes config.yml security-sensitive —
-#                                         # protect it like you protect your .env
-#   interval: 6h
-#   timeout: 30s                          # optional; default 30s; kills the child on expiry
-#   parse: json                           # optional; json (default) | number | raw
+# LAYOUT --------------------------------------------------------------------------
 #
-# SERVER --------------------------------------------------------------------------------
+# Two shapes. Use one.
 #
-# bind - address:port -> where the dashboard listens on. This is a security perimeter: SitRepHQ has no login.
-#      - BIND YOUR VPN/TAILNET IP so the kernel only accepts connections from the mesh. NEVER BIND A PUBLIC IP ADDR!
+#   layout:                           # single view: every source, one set of panes
+#     panes: [ ... ]
 #
-#      bind: 127.0.0.1:1986                 # default - this machine only
-#      bind: 100.64.0.5:443                 # tailnet IP - reachable mesh-wide
+#   layout:                           # tabbed: each tab is its own view
+#     tabs:
+#       - name: OVERVIEW              # optional, unnamed tabs get ALPHA, BRAVO, ...
+#         sources: [a, b]             # optional, the strip for this tab; empty = all
+#         panes: [ ... ]
 #
-# EXAMPLES ------------------------------------------------------------------------------
+# Keys 1 to 9 switch tabs. The attention bar at the top covers every tab, so a
+# failure on a tab you are not looking at still shows. Only the active tab's panes
+# are live; switching away closes them and switching back reconnects.
+#
+# Panes:
+#   - title: <label>
+#     url: https://<target>           # http:// or https:// only
+#     kind: site                      # site (default): the page, scaled to fit
+#                                     # term: a web terminal such as ttyd, 1:1
+#                                     # log: the Pi-hole query stream, no url
+#     filter:                         # log panes only, optional
+#       client: "192.168.30.*"        # exact, or a prefix ending in *
+#       domain: "*.example.com"       # same rules
+#       status: gravity               # exact, case-insensitive
+#
+# A log pane without a filter shows a client dropdown for filtering by hand.
+#
+# Pane URLs are loaded by the browser viewing the dashboard, not by the server, so
+# they must be reachable from every device you view it on. Their origins are added
+# to the dashboard's Content-Security-Policy automatically; nothing else can be
+# framed. A blank pane usually means the target sends X-Frame-Options or
+# frame-ancestors. Allow the dashboard's exact origin on the target, never *.
+# `sitrep check` reports which panes will refuse to load.
+#
+# EXAMPLE -------------------------------------------------------------------------
+# Addresses below are documentation ranges. Delete anything you don't run.
 
 bind: 127.0.0.1:1986
 
@@ -59,20 +194,50 @@ sources:
     interval: 30s
 
   - type: systemd-agent
-    name: systemd-host4
+    name: systemd-worker1
     url: http://198.51.100.20:9100/units
+    interval: 30s
+    label_rules:
+      strip_prefix: ingest-
+      aliases:
+        nightly-backup: backup
+
+  - type: pihole
+    name: dns
+    base: http://192.168.1.53:8080
+    password_env: PIHOLE_PASSWORD
+    interval: 30s
+
+  - type: unifi
+    name: net
+    base: https://192.168.1.1
+    key_env: UNIFI_KEY
+    gateway: Gateway
+    insecure: true
     interval: 30s
 
   - type: http-json
-    name: digitalocean-Billing
+    name: do-billing
     url: https://api.digitalocean.com/v2/customers/my/balance
     interval: 6h
     auth:
       bearer_env: DO_TOKEN
+    pills:
+      - { path: month_to_date_usage, label: "DO ${} MTD", state: idle }
 
   - type: http-json
-    name: kuma-up
-    url: https://uptime.example.com/api/status-page/heartbeat/homelab
+    name: forgejo
+    url: https://git.example.com/api/v1/repos/owner/project
+    interval: 15m
+    auth:
+      header: { name: Authorization, value: "token {}", value_env: FORGEJO_TOKEN }
+    pills:
+      - { path: open_pr_counter, label: "PRs {}", state: idle }
+      - { path: open_issues_count, label: "issues {}", state: idle }
+
+  - type: http-json
+    name: kuma
+    url: https://uptime.example.com/api/status-page/heartbeat/home
     interval: 1m
     expect: ok
 
@@ -81,30 +246,31 @@ sources:
     run: >
       AWS_PAGER="" aws cloudwatch get-metric-statistics
       --namespace AWS/S3 --metric-name BucketSizeBytes
-      --dimensions Name={BucketName},Value={MYBUCKET} Name=StorageType,Value=DeepArchiveStorage
+      --dimensions Name=BucketName,Value=my-archive-bucket Name=StorageType,Value=DeepArchiveStorage
       --start-time $(date -u -d '3 days ago' +%Y-%m-%dT%H:%M:%S)
       --end-time $(date -u +%Y-%m-%dT%H:%M:%S)
       --period 86400 --statistics Average
-      --region {S3REGION} --output json
+      --region us-east-1 --output json
+      --query 'sort_by(Datapoints,&Timestamp)[-1]'
     interval: 6h
     timeout: 60s
-
-# LAYOUT ------------------------------------------------------------------------------
-#
-# panes - iframes embedded in the page. Each URL is fetched by the VIEWING BROWSER, not the server. Must be reachable
-# from every device that views the dashboard on (ON VPN OR TAILNET).
-#
-#   - title: <label>                    # shown in the panes title bar
-#     url: https://<target>             # http:// or https:// only
-#     kind: site                        # site(default) - scaled page preview
-#                                       # term - live terminal (ttyd), rendered 1:1
-#
-# Pane origins are automatically added to the dashboard's Content-Security-Policy. Nothing else can be embedded.
-# If pane renders blank, the target is likely sending X-Frame-Options or frame-ancestors.
-# Need dashboard added exact origin only.... NEVER *.
+    pills:
+      - { path: Average, label: "glacier {}", format: bytes, state: idle }
 
 layout:
-  panes:
-    - { title: host5, url: "https://host5.example.ts.net:7681", kind: term }
-    - { title: blog, url: "https://blog.example.com" }
+  tabs:
+    - name: OVERVIEW
+      panes:
+        - { title: vps1, url: "https://vps1.example.com:7681", kind: term }
+        - { title: blog, url: "https://blog.example.com" }
 
+    - name: JOBS
+      sources: [systemd-worker1, glacier, do-billing, forgejo]
+      panes:
+        - { title: worker1, url: "https://worker1.example.com:7681", kind: term }
+
+    - name: DNS
+      sources: [dns, net]
+      panes:
+        - { title: all queries, kind: log }
+        - { title: iot vlan, kind: log, filter: { client: "192.168.30.*" } }
