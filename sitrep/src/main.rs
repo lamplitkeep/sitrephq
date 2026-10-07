@@ -134,6 +134,7 @@ async fn main() {
             .panes
             .iter()
             .chain(layout.tabs.iter().flat_map(|t| t.panes.iter()))
+            .filter(|p| !p.url.is_empty())
             .map(|p| p.url.splitn(4, '/').take(3).collect::<Vec<_>>().join("/"))
             .collect();
         origins.sort();
