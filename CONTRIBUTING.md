@@ -14,6 +14,7 @@ sitrephq/
 │   ├── examples/        example config, env, and themes
 │   └── presets/         ready-made source files
 ├── sitrep-agent/        the systemd agent
+├── tests/               frontend tests (Node)
 └── docs/
 ```
 
@@ -44,11 +45,12 @@ rebuild. Release builds embed them in the binary.
 
 ```sh
 cargo test --workspace
-node --test sitrep/static/
+node --test
 ```
 
-The Rust tests cover config parsing, validation, and include confinement. The
-Node tests cover the state classifiers, which decide what color every pill is.
+Run both from the repo root, or use `./test.sh`. The Rust tests cover config
+parsing, validation, and include confinement. The Node tests in `tests/` cover
+the state classifiers and pill plucking, which decide what color every pill is.
 If you change how a container or unit maps to a state, add a case for it.
 
 Before opening a pull request:

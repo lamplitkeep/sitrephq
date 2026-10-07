@@ -42,13 +42,17 @@ jobs:
 
   binaries:
     runs-on: ubuntu-latest
+    container: rust:1-slim-bookworm
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - name: build release binary
-        run: cargo build --release -p sitrephq
+      - name: build release binaries
+        run: cargo build --release --workspace
       - name: rename for release
-        run: cp target/release/sitrep sitrep-linux-x86_64
+        run: |
+          cp target/release/sitrep sitrep-linux-x86_64
+          cp target/release/sitrep-agent sitrep-agent-linux-x86_64
       - uses: softprops/action-gh-release@v2
         with:
-          files: sitrep-linux-x86_64
+          files: |
+            sitrep-linux-x86_64
+            sitrep-agent-linux-x86_64

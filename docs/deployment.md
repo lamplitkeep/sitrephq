@@ -211,13 +211,46 @@ recreate the container with `docker compose up -d --force-recreate`.
 ## sitrep-agent
 
 `systemd-agent` sources need `sitrep-agent` on each host you want units from.
-
-<!-- TODO: release asset name, command-line options, and how the agent chooses which units to report -->
+It runs `systemctl show` for a list of units you give it and serves the results
+as JSON at `/units`.
 
 ```sh
 curl -LO https://github.com/lamplitkeep/sitrephq/releases/latest/download/sitrep-agent-linux-x86_64
 sudo install -m 755 sitrep-agent-linux-x86_64 /usr/local/bin/sitrep-agent
 ```
+
+It's configured with two environment variables:
+
+| Variable | Default | Notes |
+| --- | --- | --- |
+| `AGENT_BIND` | `127.0.0.1:9100` | Address and port to listen on. Set it to the host's VPN or tailnet address so the dashboard can reach it. |
+| `AGENT_UNITS` | `/etc/sitrep-agent/units` | The file listing which units to report |
+
+### The units file
+
+One unit per line. Blank lines and lines starting with `#` are ignored.
+
+```
+# /etc/sitrep-agent/units
+nginx.service
+postgresql.service
+backup.timer
+backup.service
+
+# a target reports itself plus every .service it pulls in
+ingest.target
+```
+
+Use full unit names, including the suffix. A `.target` line reports the target
+and every `.service` unit in its dependency tree, so a group of related jobs can
+be tracked by adding them to one target instead of listing each one here. New
+services added to the target show up without editing this file.
+
+The file is read on every request, so edits take effect on the dashboard's next
+poll without restarting the agent. A unit that doesn't exist on the host shows as
+ghost.
+
+### systemd unit
 
 `/etc/systemd/system/sitrep-agent.service`:
 
@@ -229,6 +262,7 @@ Wants=network-online.target
 
 [Service]
 DynamicUser=yes
+Environment=AGENT_BIND=100.64.0.20:9100
 ExecStart=/usr/local/bin/sitrep-agent
 Restart=on-failure
 
@@ -236,10 +270,19 @@ Restart=on-failure
 WantedBy=multi-user.target
 ```
 
-The agent only reads unit state. It doesn't need root and can't start, stop, or
-change anything. It serves `/units` on port 9100 without authentication, so like
-the dashboard it belongs on a private interface. Firewall port 9100 so only the
-dashboard host can reach it.
+```sh
+sudo systemctl daemon-reload
+sudo systemctl enable --now sitrep-agent
+curl -s http://100.64.0.20:9100/units
+```
+
+`DynamicUser=yes` runs it as a throwaway unprivileged user. Reading unit state
+doesn't need root, and the agent can't start, stop, or change anything. The units
+file only needs to be world-readable, which it is by default.
+
+The agent has no authentication. Bind it to a private address, and firewall port
+9100 so only the dashboard host can reach it. If you use Tailscale, add
+`After=tailscaled.service` so the address exists before the agent binds it.
 
 ## Docker socket proxy
 

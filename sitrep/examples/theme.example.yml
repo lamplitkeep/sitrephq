@@ -55,4 +55,4 @@
 
 # pill-radius: "3px"          # 0px for square, 999px for fully round
 # pane-render-width: "1280px" # site panes render the page at this width, then scale it to fit
-# tab-stagger: "8px"          # vertical offset between staggered tabs in the rail
+# tab-stagger: "4px"          # vertical offset between staggered tabs in the rail

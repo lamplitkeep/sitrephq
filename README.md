@@ -2,9 +2,6 @@
 
 A self-hosted status dashboard that doesn't limit you.
 
-<!-- TODO: screenshot from a scrubbed demo config -->
-![SitRepHQ](docs/img/sitrep.png)
-
 ## Why it exists
 
 Most homelab dashboards are link pages with widgets bolted on. Each widget is a
@@ -115,16 +112,21 @@ The example config documents every option inline. For a longer walkthrough see
 `systemd-agent` sources read from `sitrep-agent`, a small binary that runs on
 each host you want units from and reports them over HTTP at `/units`.
 
-<!-- TODO: agent release asset name, flags, and unit selection -->
 ```sh
 curl -LO https://github.com/lamplitkeep/sitrephq/releases/latest/download/sitrep-agent-linux-x86_64
-chmod +x sitrep-agent-linux-x86_64
-sudo install sitrep-agent-linux-x86_64 /usr/local/bin/sitrep-agent
+sudo install -m 755 sitrep-agent-linux-x86_64 /usr/local/bin/sitrep-agent
 ```
 
-Run it under systemd and bind it to the same private network as the dashboard.
-It listens on port 9100. Example units for both binaries are in
-[docs/deployment.md](docs/deployment.md).
+List the units to report in `/etc/sitrep-agent/units`, one per line. A `.target`
+reports every service it pulls in. Set `AGENT_BIND` to the host's private
+address so the dashboard can reach it:
+
+```sh
+AGENT_BIND=100.64.0.20:9100 sitrep-agent
+```
+
+The units file format and a systemd unit are in
+[docs/deployment.md](docs/deployment.md#sitrep-agent).
 
 ## Security model
 

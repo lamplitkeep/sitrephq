@@ -7,6 +7,7 @@ license = "MIT"
 repository = "https://github.com/lamplitkeep/sitrephq"
 readme = "../README.md"
 keywords = ["dashboard", "homelab", "monitoring", "selfhosted"]
+include = ["src/**", "static/**", "examples/**", "presets/**"]
 categories = ["command-line-utilities"]
 
 [[bin]]
