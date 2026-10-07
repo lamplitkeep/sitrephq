@@ -48,7 +48,11 @@ impl Source for CommandSource {
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
-            anyhow::bail!("exit {}: {}", output.status, stderr.trim());
+            let stderr = stderr.trim();
+            if stderr.is_empty() {
+                anyhow::bail!("command failed ({})", output.status);
+            }
+            anyhow::bail!("command failed ({}): {}", output.status, stderr);
         }
 
         let stdout = String::from_utf8_lossy(&output.stdout);
