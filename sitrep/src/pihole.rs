@@ -63,16 +63,17 @@ impl PiholeClient {
         Ok(Self { base, password, sid: None, http })
     }
 
-    async fn auth(&mut self) -> anyhow::Result <()> {
-        let resp: AuthResponse = self
+    async fn auth(&mut self) -> anyhow::Result<()> {
+        let resp = self
             .http
             .post(format!("{}/api/auth", self.base))
             .json(&serde_json::json!({ "password": self.password }))
             .send()
-            .await?
-            .error_for_status()?
-            .json()
             .await?;
+        if resp.status() == reqwest::StatusCode::UNAUTHORIZED {
+            anyhow::bail!("pi-hole rejected the app password");
+        }
+        let resp: AuthResponse = resp.error_for_status()?.json().await?;
         match (resp.session.valid, resp.session.sid) {
             (true, Some(sid)) => {
                 register(&self.base, &sid);
