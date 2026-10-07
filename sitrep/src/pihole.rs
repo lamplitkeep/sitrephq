@@ -1,5 +1,41 @@
 use serde::Deserialize;
 use std::time::Duration;
+use std::sync::Mutex;
+
+// Every live Pi-hole session in this process, as (base, sid).
+// Login adds to it, re-login removes the stale one, shutdown drains it.
+static SESSIONS: Mutex<Vec<(String, String)>> = Mutex::new(Vec::new());
+
+fn register(base: &str, sid: &str) {
+    SESSIONS.lock().unwrap().push((base.to_string(), sid.to_string()));
+}
+
+fn unregister(sid: &str) {
+    SESSIONS.lock().unwrap().retain(|(_, s)| s != sid);
+}
+
+/// Log out every session this process opened. Called once at shutdown.
+pub async fn logout_all() {
+    let sessions: Vec<(String, String)> = std::mem::take(&mut *SESSIONS.lock().unwrap());
+    if sessions.is_empty() {
+        return;
+    }
+    let http = match reqwest::Client::builder()
+        .timeout(Duration::from_secs(2))
+        .build()
+    {
+        Ok(c) => c,
+        Err(_) => return,
+    };
+    for (base, sid) in sessions {
+        let _ = http
+            .delete(format!("{base}/api/auth"))
+            .header("sid", &sid)
+            .send()
+            .await;
+    }
+    eprintln!("[pihole] logged out of open sessions");
+}
 
 #[derive(Deserialize)]
 struct AuthResponse {
@@ -39,6 +75,7 @@ impl PiholeClient {
             .await?;
         match (resp.session.valid, resp.session.sid) {
             (true, Some(sid)) => {
+                register(&self.base, &sid);
                 self.sid = Some(sid);
                 Ok(())
             }
@@ -52,7 +89,9 @@ impl PiholeClient {
         }
         let resp = self.send(path).await?;
         if resp.status() == reqwest::StatusCode::UNAUTHORIZED {
-            self.sid = None;
+            if let Some(old) = self.sid.take() {
+                unregister(&old);
+            }
             self.auth().await?;
             let resp = self.send(path).await?;
             return Ok(resp.error_for_status()?.json().await?);
@@ -74,20 +113,4 @@ impl PiholeClient {
             .await?)
     }
 
-}
-
-impl Drop for PiholeClient {
-    fn drop(&mut self) {
-        if let Some(sid) = self.sid.take() {
-            let base = self.base.clone();
-            let http = self.http.clone();
-            tokio::spawn(async move {
-                let _ = http
-                    .delete(format!("{base}/api/auth"))
-                    .header("sid", sid)
-                    .send()
-                    .await;
-            });
-        }
-    }
 }

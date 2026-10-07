@@ -173,17 +173,43 @@ async fn main() {
                 .expect("loading TLS cert/key");
             let addr: std::net::SocketAddr = bind.parse().expect("invalid bind address");
             println!("listening on https://{bind}");
-            axum_server::bind_rustls(addr, cfg)
-                .serve(app.into_make_service())
-                .await
-                .expect("server failed");
+            tokio::select! {
+            r = axum_server::bind_rustls(addr, cfg).serve(app.into_make_service()) => {
+                r.expect("server failed");
+            }
+            _ = shutdown_signal() => {}
+        }
         }
         None => {
             let listener = tokio::net::TcpListener::bind(&bind).await.expect("bind failed");
             println!("listening on http://{bind}");
-            axum::serve(listener, app).await.expect("server failed");
+            tokio::select! {
+            r = axum::serve(listener, app) => {
+                r.expect("server failed");
+            }
+            _ = shutdown_signal() => {}
+        }
         }
     }
+
+    pihole::logout_all().await;
+}
+
+async fn shutdown_signal() {
+    let ctrl_c = async {
+        tokio::signal::ctrl_c().await.expect("installing Ctrl-C handler");
+    };
+    let term = async {
+        tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+            .expect("installing SIGTERM handler")
+            .recv()
+            .await;
+    };
+    tokio::select! {
+        _ = ctrl_c => {},
+        _ = term => {},
+    }
+    eprintln!("shutting down");
 }
 
 async fn status(State(state): State<AppState>) -> Json<HashMap<String, SourceEntry>> {
