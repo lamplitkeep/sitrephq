@@ -152,7 +152,7 @@ impl Source for Unifi {
 
         let want = self.gateway.clone();
         let gateway = match want.as_deref() {
-            Some(want) => match devices.data.iter().find(|d| &d.name == want) {
+            Some(want) => match devices.data.iter().find(|d| d.name == want) {
                 Some(d) => {
                     let s: GatewayStats = self
                         .get(&format!("/sites/{site}/devices/{}/statistics/latest", d.id))

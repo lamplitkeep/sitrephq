@@ -44,14 +44,13 @@ async fn log_stream(
     let stream = async_stream::stream! {
         if let Some(mut rx) = rx {
             while let Ok(row) = rx.recv().await {
-                let ok = filter.client.as_deref().map_or(true, |p| log_stream::glob_match(p, &row.client))
-                    && filter.domain.as_deref().map_or(true, |p| log_stream::glob_match(p, &row.domain))
-                    && filter.status.as_deref().map_or(true, |p| p.eq_ignore_ascii_case(&row.status));
-                if ok {
-                    if let Ok(json) = serde_json::to_string(&row) {
+                let ok = filter.client.as_deref().is_none_or(|p| log_stream::glob_match(p, &row.client))
+                    && filter.domain.as_deref().is_none_or(|p| log_stream::glob_match(p, &row.domain))
+                    && filter.status.as_deref().is_none_or(|p| p.eq_ignore_ascii_case(&row.status));
+                if ok
+                    && let Ok(json) = serde_json::to_string(&row) {
                         yield Ok(Event::default().data(json));
                     }
-                }
             }
         }
     };
