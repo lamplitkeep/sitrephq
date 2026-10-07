@@ -1,3 +1,8 @@
 /target
 sitrep/config.yml
+sitrep/theme.yml
+sitrep/deploy/release.sh
+sitrep/sources
+.idea/
+dev.sh
 *.env
