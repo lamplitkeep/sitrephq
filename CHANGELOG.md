@@ -7,7 +7,7 @@ change the config format; those changes are called out under **Changed**.
 
 ## [Unreleased]
 
-## [0.1.0] - YYYY-MM-DD
+## [0.1.0] - 2026-10-07
 
 First public release.
 
@@ -33,8 +33,10 @@ First public release.
 - Optional built-in TLS
 - `sitrep-agent` for reporting systemd units from remote hosts
 - Forgejo and Gitea presets
-- Release binary for Linux x86_64, Docker images (`:latest` distroless and
-  `:full`), and `cargo install sitrephq`
+- Graceful shutdown on SIGINT and SIGTERM, logging out of Pi-hole sessions
+- `sitrep check` for validating a config and diagnosing panes
+  - Release binaries for Linux x86_64 (`sitrep` and `sitrep-agent`), Docker
+    images (`:latest` distroless and `:full`), and `cargo install sitrephq`
 
 [Unreleased]: https://github.com/lamplitkeep/sitrephq/compare/v0.1.0...HEAD
 [0.1.0]: https://github.com/lamplitkeep/sitrephq/releases/tag/v0.1.0
