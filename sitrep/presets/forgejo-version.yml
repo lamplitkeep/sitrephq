@@ -1,7 +1,10 @@
+# Forgejo / Gitea: server is up, with its version.
+# Tested against Forgejo 15 and Gitea 1.22.
+# The version endpoint is public, so no token is needed. It also answers when a
+# token is wrong, so it can't be used to test credentials.
 type: http-json
 name: forgejo
-url: https://git.example.com/api/v1/version
+url: https://<host>/api/v1/version
 interval: 5m
-auth: { header: { name: Authorization, value_env: FORGEJO_TOKEN } }
 pills:
-  - { path: "version", label: "forge {}", state: ok }
+  - { path: version, label: "forge {}", state: ok }

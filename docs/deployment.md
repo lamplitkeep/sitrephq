@@ -191,9 +191,9 @@ services:
     restart: unless-stopped
 ```
 
-<!-- TODO: confirm the image's default config path is /config/config.yml -->
-
-Mount the whole config directory, not just `config.yml`. `theme.yml` and any
+The image runs `/sitrep /config/config.yml`, so the config file must be named
+`config.yml` at the top of the mounted directory. Mount the whole config
+directory, not just `config.yml`. `theme.yml` and any
 included source files are read from the same directory.
 
 **Use host networking.** Inside a container, `127.0.0.1` is the container

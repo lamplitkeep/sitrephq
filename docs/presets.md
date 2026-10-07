@@ -40,12 +40,10 @@ against the new one and bring over what you want.
 
 ## Available presets
 
-<!-- TODO: keep this table in sync with sitrep/presets/ -->
-
 | File | Service | Shows |
 | --- | --- | --- |
-| `forgejo-version.yml` | Forgejo or Gitea | Server is up (version endpoint) |
-| `forgejo-repo.yml` | Forgejo or Gitea | Open pull requests, open issues, and stars for one repository |
+| `forgejo-version.yml` | Forgejo or Gitea | Server is up, with its version. No token needed. |
+| `forgejo-repo.yml` | Forgejo or Gitea | Open pull requests and open issues for one repository |
 
 The example config also shows complete sources for DigitalOcean billing, an
 Uptime Kuma status page, and an S3 bucket size through the aws CLI. Copy them

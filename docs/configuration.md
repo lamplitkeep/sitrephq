@@ -226,11 +226,11 @@ auth:
 
 auth:
   header: { name: X-Api-Key, value_env: TOKEN }
-                                     # X-Api-Key: <secret>
+  # X-Api-Key: <secret>
 
 auth:
   header: { name: Authorization, value: "token {}", value_env: TOKEN }
-                                     # Authorization: token <secret>
+  # Authorization: token <secret>
 
 auth:
   basic: { user: admin, password_env: PASSWORD }
@@ -293,21 +293,37 @@ pills:
 
 | Field | Notes |
 | --- | --- |
-| `path` | Where the value is in the JSON. Dots separate keys. Numbers index arrays and negative numbers count from the end. |
-| `label` | Pill text. `{}` is replaced by the value. |
-| `format` | `bytes` (1024-based, so 8.4e12 shows as 7.6 TB), `percent`, or `number` (thousands separators) |
-| `state` | A fixed state for the pill: `ok`, `idle`, `run`, `ghost`, or `bad` |
+| `path` | Where the value is in the JSON. Dots separate keys, numbers index arrays, and negative numbers count from the end, so `Datapoints.-1.Average` is the last item's `Average`. |
+| `label` | Pill text. `{}` is replaced by the value. Defaults to the value alone. |
+| `format` | `bytes` (1024-based, so 8.4e12 shows as 7.6 TB), `percent` (rounded, with a % sign), or `number` (thousands separators). Values that aren't numbers are shown as they are. |
+| `state` | A fixed state for the pill: `ok`, `idle`, `run`, `ghost`, or `bad`. Defaults to `idle`. |
 | `map` | Picks the state from the value. Values not in the map show as ghost. |
 
 Use `state` for numbers you only want to read, like a bill or a bucket size.
-`idle` is the usual choice because it doesn't draw the eye. Use `map` when the
-value itself says whether things are fine.
+The default, `idle`, doesn't draw the eye. Use `map` when the value itself says
+whether things are fine.
+
+`map` keys are compared against the value as it's displayed, after `format`. A
+boolean field is matched as `"true"` or `"false"`, and a field with
+`format: percent` would need keys like `"100%"`. Quote keys that YAML would
+otherwise read as booleans or numbers:
+
+```yaml
+pills:
+  - path: healthy
+    label: "api"
+    map:
+      "true": ok
+      "false": bad
+```
 
 If the path no longer exists in the response, the pill shows `?` as ghost. APIs
 change, and a pill that goes quietly wrong is worse than one that says it can't
 find its data.
 
-<!-- TODO: confirm path syntax and the default state when neither state nor map is set -->
+Pills read from a JSON object or array. A command that prints a bare number or
+plain text (`parse: number` or `raw`) has no path to read, so print JSON instead,
+as in the `disk-root` example above.
 
 ## Includes
 
@@ -417,15 +433,28 @@ add a sixth state.
 
 ## Checking a config
 
-<!-- TODO: confirm sitrep check behavior and arguments -->
-
 ```sh
-sitrep check
+sitrep check              # uses ./config.yml
+sitrep check /etc/sitrep/config.yml
 ```
 
-validates the config the same way startup does and reports on each pane's
-target. Startup itself also validates, so a broken config fails immediately with
-a message pointing at the problem rather than serving a half-working page.
+`sitrep check` parses and validates the config the same way startup does, then
+requests each site and terminal pane from the machine it runs on and reports
+anything that will keep it from loading in a frame:
+
+- the target is unreachable
+- the target sends `X-Frame-Options`
+- the target sends a `frame-ancestors` policy that doesn't include the dashboard
+
+It doesn't start the server, poll sources, or check that the `_env` variables
+are set. Startup does all of that, so a broken config fails immediately with a
+message pointing at the problem rather than serving a half-working page.
+
+Two limits to keep in mind. The check runs from the server, so a pane that
+passes can still fail in a browser on a device that isn't on your VPN. And it
+compares against the dashboard's `bind` address, so behind a reverse proxy or
+`tailscale serve` the origin it suggests is the internal one; use the address
+you actually browse to instead.
 
 Common errors:
 

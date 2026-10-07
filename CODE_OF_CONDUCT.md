@@ -26,7 +26,7 @@ anywhere else you're representing the project.
 
 ## Enforcement
 
-Report problems privately to <!-- TODO: conduct contact email -->. Reports are
+Report problems privately to admin@slaylab.net. Reports are
 kept confidential.
 
 Maintainers may remove comments, lock threads, or block people who break these
